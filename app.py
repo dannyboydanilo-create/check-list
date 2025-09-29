@@ -33,9 +33,9 @@ def autenticar(usuario, senha):
         return None
     usuarios = carregar_usuarios()
     for u in usuarios:
-        if str(u["usuario"]).strip() == str(usuario).strip() and str(u["senha"]).strip() == str(senha).strip():
-            # Marca se é admin
-            u["admin"] = u["matricula"].strip() in ADMINS
+        if str(u.get("usuario", "")).strip() == str(usuario).strip() and str(u.get("senha", "")).strip() == str(senha).strip():
+            matricula = str(u.get("matricula", "")).strip()
+            u["admin"] = matricula in ADMINS
             return u
     return None
 
