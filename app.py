@@ -9,6 +9,9 @@ ARQUIVO_EXCEL = "checklist_samu.xlsx"
 ARQUIVO_TROCA = "troca_oleo.txt"
 INTERVALO_TROCA_OLEO = 10000
 
+# Lista de matrículas de administradores
+ADMINS = ["0000", "9999"]  # ajuste para as matrículas que você quiser como admin
+
 # ---------------- Funções auxiliares ----------------
 def carregar_usuarios():
     if os.path.exists(ARQUIVO_USUARIOS):
@@ -31,6 +34,8 @@ def autenticar(usuario, senha):
     usuarios = carregar_usuarios()
     for u in usuarios:
         if str(u["usuario"]).strip() == str(usuario).strip() and str(u["senha"]).strip() == str(senha).strip():
+            # Marca se é admin
+            u["admin"] = u["matricula"].strip() in ADMINS
             return u
     return None
 
@@ -58,25 +63,6 @@ escolha = st.sidebar.selectbox("Menu", menu)
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
-# ---------------- Administração de usuários ----------------
-st.sidebar.subheader("⚙️ Administração de Usuários")
-
-usuarios = carregar_usuarios()
-if usuarios:
-    df = pd.DataFrame(usuarios)
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.sidebar.download_button(
-        label="⬇️ Baixar usuários.csv",
-        data=csv,
-        file_name="usuarios.csv",
-        mime="text/csv"
-    )
-
-if st.sidebar.button("⚠️ Resetar usuários"):
-    df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
-    df.to_csv(ARQUIVO_USUARIOS, index=False)
-    st.sidebar.success("Arquivo de usuários resetado!")
-
 # ---------------- Cadastro ----------------
 if escolha == "Cadastro":
     st.subheader("📋 Cadastro de Usuário")
@@ -100,7 +86,27 @@ elif escolha == "Login":
     if st.session_state.usuario:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-        # Formulário checklist
+        # ---------------- Administração de usuários (somente admins) ----------------
+        if st.session_state.usuario.get("admin", False):
+            st.sidebar.subheader("⚙️ Administração de Usuários")
+
+            usuarios = carregar_usuarios()
+            if usuarios:
+                df = pd.DataFrame(usuarios)
+                csv = df.to_csv(index=False).encode("utf-8")
+                st.sidebar.download_button(
+                    label="⬇️ Baixar usuários.csv",
+                    data=csv,
+                    file_name="usuarios.csv",
+                    mime="text/csv"
+                )
+
+            if st.sidebar.button("⚠️ Resetar usuários"):
+                df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
+                df.to_csv(ARQUIVO_USUARIOS, index=False)
+                st.sidebar.success("Arquivo de usuários resetado!")
+
+        # ---------------- Formulário checklist ----------------
         st.subheader("🚐 Dados da Viatura")
         placa = st.text_input("Placa da viatura")
         prefixo = st.text_input("Prefixo da viatura")
