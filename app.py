@@ -2,31 +2,38 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-# Arquivos
-ARQUIVO_USUARIOS = "usuarios.csv"
+# Arquivos locais ainda usados para checklist e troca de óleo
 ARQUIVO_EXCEL = "checklist_samu.xlsx"
 ARQUIVO_TROCA = "troca_oleo.txt"
 INTERVALO_TROCA_OLEO = 10000
 
 # Lista de matrículas de administradores
-ADMINS = ["0000", "9999"]  # ajuste para as matrículas que você quiser como admin
+ADMINS = ["0000", "9999"]  # ajuste conforme necessário
 
-# ---------------- Funções auxiliares ----------------
+# ---------------- Conexão com Google Sheets ----------------
+# O link da planilha deve estar em Secrets (Settings > Secrets no Streamlit Cloud)
+conn = st.connection("gsheets", type=GSheetsConnection)
+
 def carregar_usuarios():
-    if os.path.exists(ARQUIVO_USUARIOS):
-        return pd.read_csv(ARQUIVO_USUARIOS).to_dict(orient="records")
-    return []
+    df = conn.read(worksheet="usuarios", ttl=0)
+    if df is None or df.empty:
+        return []
+    return df.to_dict(orient="records")
 
 def salvar_usuario(usuario, senha, nome, matricula):
-    usuarios = carregar_usuarios()
-    usuarios.append({
+    df = conn.read(worksheet="usuarios", ttl=0)
+    if df is None or df.empty:
+        df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
+    novo = pd.DataFrame([{
         "usuario": usuario.strip(),
         "senha": senha.strip(),
         "nome": nome.strip(),
         "matricula": matricula.strip()
-    })
-    pd.DataFrame(usuarios).to_csv(ARQUIVO_USUARIOS, index=False)
+    }])
+    df = pd.concat([df, novo], ignore_index=True)
+    conn.update(worksheet="usuarios", data=df)
 
 def autenticar(usuario, senha):
     if not usuario or not senha:
@@ -54,7 +61,6 @@ def salvar_ultima_troca(km):
 
 # ---------------- Interface ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
-
 st.title("🚑 Check List Ambulância SAMU/SOCIAL")
 
 menu = ["Login", "Cadastro"]
@@ -75,7 +81,7 @@ if escolha == "Cadastro":
             st.error("Preencha todos os campos!")
         else:
             usuarios = carregar_usuarios()
-            if any(u["usuario"].strip() == usuario.strip() for u in usuarios):
+            if any(str(u["usuario"]).strip() == usuario.strip() for u in usuarios):
                 st.error("Usuário já existe!")
             else:
                 salvar_usuario(usuario, senha, nome, matricula)
@@ -86,27 +92,21 @@ elif escolha == "Login":
     if st.session_state.usuario:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-        # ---------------- Administração de usuários (somente admins) ----------------
+        # Administração de usuários (somente admins)
         if st.session_state.usuario.get("admin", False):
             st.sidebar.subheader("⚙️ Administração de Usuários")
-
             usuarios = carregar_usuarios()
             if usuarios:
                 df = pd.DataFrame(usuarios)
                 csv = df.to_csv(index=False).encode("utf-8")
                 st.sidebar.download_button(
-                    label="⬇️ Baixar usuários.csv",
+                    label="⬇️ Baixar usuários (Google Sheets)",
                     data=csv,
                     file_name="usuarios.csv",
                     mime="text/csv"
                 )
 
-            if st.sidebar.button("⚠️ Resetar usuários"):
-                df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
-                df.to_csv(ARQUIVO_USUARIOS, index=False)
-                st.sidebar.success("Arquivo de usuários resetado!")
-
-        # ---------------- Formulário checklist ----------------
+        # Formulário checklist
         st.subheader("🚐 Dados da Viatura")
         placa = st.text_input("Placa da viatura")
         prefixo = st.text_input("Prefixo da viatura")
