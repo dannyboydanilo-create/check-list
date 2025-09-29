@@ -17,13 +17,20 @@ def carregar_usuarios():
 
 def salvar_usuario(usuario, senha, nome, matricula):
     usuarios = carregar_usuarios()
-    usuarios.append({"usuario": usuario, "senha": senha, "nome": nome, "matricula": matricula})
+    usuarios.append({
+        "usuario": usuario.strip(),
+        "senha": senha.strip(),
+        "nome": nome.strip(),
+        "matricula": matricula.strip()
+    })
     pd.DataFrame(usuarios).to_csv(ARQUIVO_USUARIOS, index=False)
 
 def autenticar(usuario, senha):
+    if not usuario or not senha:
+        return None
     usuarios = carregar_usuarios()
     for u in usuarios:
-        if u["usuario"].strip() == usuario.strip() and u["senha"].strip() == senha.strip():
+        if str(u["usuario"]).strip() == str(usuario).strip() and str(u["senha"]).strip() == str(senha).strip():
             return u
     return None
 
@@ -63,7 +70,7 @@ if escolha == "Cadastro":
             st.error("Preencha todos os campos!")
         else:
             usuarios = carregar_usuarios()
-            if any(u["usuario"] == usuario for u in usuarios):
+            if any(u["usuario"].strip() == usuario.strip() for u in usuarios):
                 st.error("Usuário já existe!")
             else:
                 salvar_usuario(usuario, senha, nome, matricula)
@@ -139,9 +146,12 @@ elif escolha == "Login":
         usuario = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         if st.button("Entrar"):
-            u = autenticar(usuario, senha)
-            if u:
-                st.session_state.usuario = u
-                st.experimental_rerun()
+            if not usuario or not senha:
+                st.error("Preencha usuário e senha!")
             else:
-                st.error("Usuário ou senha incorretos!")
+                u = autenticar(usuario, senha)
+                if u:
+                    st.session_state.usuario = u
+                    st.experimental_rerun()
+                else:
+                    st.error("Usuário ou senha incorretos!")
