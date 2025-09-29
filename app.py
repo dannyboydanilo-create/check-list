@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-from streamlit_airtable import AirtableConnection
+from pyairtable import Table
 
 # Arquivos locais ainda usados para checklist e troca de óleo
 ARQUIVO_EXCEL = "checklist_samu.xlsx"
@@ -10,28 +10,26 @@ ARQUIVO_TROCA = "troca_oleo.txt"
 INTERVALO_TROCA_OLEO = 10000
 
 # Lista de matrículas de administradores
-ADMINS = ["0000", "9999"]  # ajuste conforme necessário
+ADMINS = ["0000", "9999"]
 
 # ---------------- Conexão com Airtable ----------------
-conn = st.connection("airtable", type=AirtableConnection)
-
-# IDs da sua tabela (configure no secrets.toml)
+API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
+BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 TABLE_ID = st.secrets["connections"]["airtable"]["table_id"]
 
+table = Table(API_KEY, BASE_ID, TABLE_ID)
+
 def carregar_usuarios():
-    registros = conn.query(table_id=TABLE_ID)
+    registros = table.all()
     return [r["fields"] for r in registros]
 
 def salvar_usuario(usuario, senha, nome, matricula):
-    conn.insert(
-        table_id=TABLE_ID,
-        record={
-            "usuario": usuario.strip(),
-            "senha": senha.strip(),
-            "nome": nome.strip(),
-            "matricula": matricula.strip()
-        }
-    )
+    table.create({
+        "usuario": usuario.strip(),
+        "senha": senha.strip(),
+        "nome": nome.strip(),
+        "matricula": matricula.strip()
+    })
 
 def autenticar(usuario, senha):
     if not usuario or not senha:
