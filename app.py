@@ -1,59 +1,56 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import datetime
 from pyairtable import Table
 
-# Arquivos locais ainda usados para checklist e troca de óleo
-ARQUIVO_EXCEL = "checklist_samu.xlsx"
-ARQUIVO_TROCA = "troca_oleo.txt"
-INTERVALO_TROCA_OLEO = 10000
-
-# Lista de matrículas de administradores
-ADMINS = ["0000", "9999"]
-
-# ---------------- Conexão com Airtable ----------------
+# ---------------- Conexões com Airtable ----------------
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
 BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
-TABLE_ID = st.secrets["connections"]["airtable"]["table_id"]
 
-table = Table(API_KEY, BASE_ID, TABLE_ID)
+usuarios_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["usuarios_table_id"])
+checklists_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["checklists_table_id"])
+trocaoleo_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["trocaoleo_table_id"])
 
+INTERVALO_TROCA_OLEO = 10000
+
+# ---------------- Funções Usuários ----------------
 def carregar_usuarios():
-    registros = table.all()
+    registros = usuarios_table.all()
     return [r["fields"] for r in registros]
 
-def salvar_usuario(usuario, senha, nome, matricula):
-    table.create({
+def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
+    usuarios_table.create({
         "usuario": usuario.strip(),
         "senha": senha.strip(),
         "nome": nome.strip(),
-        "matricula": matricula.strip()
+        "matricula": matricula.strip(),
+        "is_admin": is_admin
     })
 
 def autenticar(usuario, senha):
-    if not usuario or not senha:
-        return None
     usuarios = carregar_usuarios()
     for u in usuarios:
-        if str(u.get("usuario", "")).strip() == str(usuario).strip() and str(u.get("senha", "")).strip() == str(senha).strip():
-            matricula = str(u.get("matricula", "")).strip()
-            u["admin"] = matricula in ADMINS
+        if u.get("usuario") == usuario and u.get("senha") == senha:
+            valor_admin = str(u.get("is_admin", "")).lower()
+            u["admin"] = valor_admin in ["true", "1", "yes", "sim"]
             return u
     return None
 
+# ---------------- Funções Checklist ----------------
+def salvar_checklist(dados):
+    checklists_table.create(dados)
+
 def obter_ultima_troca():
-    if os.path.exists(ARQUIVO_TROCA):
-        try:
-            with open(ARQUIVO_TROCA, "r", encoding="utf-8") as f:
-                return int(f.read().strip())
-        except:
-            return 0
+    registros = trocaoleo_table.all(sort=["-data"])
+    if registros:
+        return int(registros[0]["fields"].get("km", 0))
     return 0
 
-def salvar_ultima_troca(km):
-    with open(ARQUIVO_TROCA, "w", encoding="utf-8") as f:
-        f.write(str(km))
+def salvar_troca_oleo(km):
+    trocaoleo_table.create({
+        "km": km,
+        "data": datetime.now().strftime("%d/%m/%Y %H:%M")
+    })
 
 # ---------------- Interface ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
@@ -72,15 +69,16 @@ if escolha == "Cadastro":
     senha = st.text_input("Senha", type="password")
     nome = st.text_input("Nome completo")
     matricula = st.text_input("Matrícula")
+    is_admin = st.checkbox("Administrador?")
     if st.button("Cadastrar"):
         if not usuario or not senha or not nome or not matricula:
             st.error("Preencha todos os campos!")
         else:
             usuarios = carregar_usuarios()
-            if any(str(u.get("usuario", "")).strip() == usuario.strip() for u in usuarios):
+            if any(u.get("usuario") == usuario for u in usuarios):
                 st.error("Usuário já existe!")
             else:
-                salvar_usuario(usuario, senha, nome, matricula)
+                salvar_usuario(usuario, senha, nome, matricula, is_admin)
                 st.success("Usuário cadastrado com sucesso! Vá para Login.")
 
 # ---------------- Login ----------------
@@ -121,9 +119,8 @@ elif escolha == "Login":
             if not placa or not prefixo or km == 0:
                 st.error("Preencha todos os campos obrigatórios!")
             else:
-                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                 dados = {
-                    "Data": data_atual,
+                    "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                     "Condutor": st.session_state.usuario["nome"],
                     "Matrícula": st.session_state.usuario["matricula"],
                     "Placa": placa,
@@ -135,14 +132,7 @@ elif escolha == "Login":
                     "Oxigênio Portátil": oxp,
                     "Avarias": avarias if avarias else "Nenhuma"
                 }
-
-                if os.path.exists(ARQUIVO_EXCEL):
-                    df_existente = pd.read_excel(ARQUIVO_EXCEL)
-                    df_novo = pd.concat([df_existente, pd.DataFrame([dados])], ignore_index=True)
-                else:
-                    df_novo = pd.DataFrame([dados])
-
-                df_novo.to_excel(ARQUIVO_EXCEL, index=False)
+                salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
                 # Aviso de troca de óleo
@@ -155,7 +145,7 @@ elif escolha == "Login":
                     st.info(f"⏳ Faltam {faltam} km para a próxima troca de óleo.")
 
         if st.button("🔧 Registrar troca de óleo (Admin)"):
-            salvar_ultima_troca(km)
+            salvar_troca_oleo(km)
             st.success(f"Troca de óleo registrada em {km} km.")
 
         if st.button("Sair"):
@@ -167,12 +157,9 @@ elif escolha == "Login":
         usuario = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         if st.button("Entrar"):
-            if not usuario or not senha:
-                st.error("Preencha usuário e senha!")
+            u = autenticar(usuario, senha)
+            if u:
+                st.session_state.usuario = u
+                st.rerun()
             else:
-                u = autenticar(usuario, senha)
-                if u:
-                    st.session_state.usuario = u
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos!")
+                st.error("Usuário ou senha incorretos!")
