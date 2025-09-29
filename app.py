@@ -139,7 +139,7 @@ elif escolha == "Login":
 
         if st.button("Sair"):
             st.session_state.usuario = None
-            st.experimental_rerun()
+            st.rerun()   # corrigido
 
     else:
         st.subheader("🔑 Login")
@@ -152,6 +152,6 @@ elif escolha == "Login":
                 u = autenticar(usuario, senha)
                 if u:
                     st.session_state.usuario = u
-                    st.experimental_rerun()
+                    st.rerun()   # corrigido
                 else:
                     st.error("Usuário ou senha incorretos!")
