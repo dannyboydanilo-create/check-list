@@ -13,14 +13,21 @@ INTERVALO_TROCA_OLEO = 10000
 ADMINS = ["0000", "9999"]  # ajuste conforme necessário
 
 # ---------------- Conexão com Google Sheets ----------------
-# O link da planilha deve estar em Secrets (Settings > Secrets no Streamlit Cloud)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def carregar_usuarios():
-    df = conn.read(worksheet="usuarios", ttl=0)
-    if df is None or df.empty:
+    try:
+        df = conn.read(worksheet="usuarios", ttl=0)
+        # Se a aba não existir ou estiver vazia, cria com cabeçalhos
+        if df is None or df.empty:
+            df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
+            conn.update(worksheet="usuarios", data=df)
+        return df.to_dict(orient="records")
+    except Exception:
+        # Se der erro (ex.: aba não existe), cria a aba do zero
+        df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
+        conn.update(worksheet="usuarios", data=df)
         return []
-    return df.to_dict(orient="records")
 
 def salvar_usuario(usuario, senha, nome, matricula):
     df = conn.read(worksheet="usuarios", ttl=0)
