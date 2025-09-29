@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
+from streamlit_airtable import AirtableConnection
 
 # Arquivos locais ainda usados para checklist e troca de óleo
 ARQUIVO_EXCEL = "checklist_samu.xlsx"
@@ -12,35 +12,26 @@ INTERVALO_TROCA_OLEO = 10000
 # Lista de matrículas de administradores
 ADMINS = ["0000", "9999"]  # ajuste conforme necessário
 
-# ---------------- Conexão com Google Sheets ----------------
-conn = st.connection("gsheets", type=GSheetsConnection)
+# ---------------- Conexão com Airtable ----------------
+conn = st.connection("airtable", type=AirtableConnection)
+
+# IDs da sua tabela (configure no secrets.toml)
+TABLE_ID = st.secrets["connections"]["airtable"]["table_id"]
 
 def carregar_usuarios():
-    try:
-        df = conn.read(worksheet="usuarios", ttl=0)
-        # Se a aba não existir ou estiver vazia, cria com cabeçalhos
-        if df is None or df.empty:
-            df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
-            conn.update(worksheet="usuarios", data=df)
-        return df.to_dict(orient="records")
-    except Exception:
-        # Se der erro (ex.: aba não existe), cria a aba do zero
-        df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
-        conn.update(worksheet="usuarios", data=df)
-        return []
+    registros = conn.query(table_id=TABLE_ID)
+    return [r["fields"] for r in registros]
 
 def salvar_usuario(usuario, senha, nome, matricula):
-    df = conn.read(worksheet="usuarios", ttl=0)
-    if df is None or df.empty:
-        df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
-    novo = pd.DataFrame([{
-        "usuario": usuario.strip(),
-        "senha": senha.strip(),
-        "nome": nome.strip(),
-        "matricula": matricula.strip()
-    }])
-    df = pd.concat([df, novo], ignore_index=True)
-    conn.update(worksheet="usuarios", data=df)
+    conn.insert(
+        table_id=TABLE_ID,
+        record={
+            "usuario": usuario.strip(),
+            "senha": senha.strip(),
+            "nome": nome.strip(),
+            "matricula": matricula.strip()
+        }
+    )
 
 def autenticar(usuario, senha):
     if not usuario or not senha:
@@ -88,7 +79,7 @@ if escolha == "Cadastro":
             st.error("Preencha todos os campos!")
         else:
             usuarios = carregar_usuarios()
-            if any(str(u["usuario"]).strip() == usuario.strip() for u in usuarios):
+            if any(str(u.get("usuario", "")).strip() == usuario.strip() for u in usuarios):
                 st.error("Usuário já existe!")
             else:
                 salvar_usuario(usuario, senha, nome, matricula)
@@ -107,7 +98,7 @@ elif escolha == "Login":
                 df = pd.DataFrame(usuarios)
                 csv = df.to_csv(index=False).encode("utf-8")
                 st.sidebar.download_button(
-                    label="⬇️ Baixar usuários (Google Sheets)",
+                    label="⬇️ Baixar usuários (Airtable)",
                     data=csv,
                     file_name="usuarios.csv",
                     mime="text/csv"
