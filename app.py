@@ -58,6 +58,25 @@ escolha = st.sidebar.selectbox("Menu", menu)
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
+# ---------------- Administração de usuários ----------------
+st.sidebar.subheader("⚙️ Administração de Usuários")
+
+usuarios = carregar_usuarios()
+if usuarios:
+    df = pd.DataFrame(usuarios)
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.sidebar.download_button(
+        label="⬇️ Baixar usuários.csv",
+        data=csv,
+        file_name="usuarios.csv",
+        mime="text/csv"
+    )
+
+if st.sidebar.button("⚠️ Resetar usuários"):
+    df = pd.DataFrame(columns=["usuario", "senha", "nome", "matricula"])
+    df.to_csv(ARQUIVO_USUARIOS, index=False)
+    st.sidebar.success("Arquivo de usuários resetado!")
+
 # ---------------- Cadastro ----------------
 if escolha == "Cadastro":
     st.subheader("📋 Cadastro de Usuário")
@@ -139,7 +158,7 @@ elif escolha == "Login":
 
         if st.button("Sair"):
             st.session_state.usuario = None
-            st.rerun()   # corrigido
+            st.rerun()
 
     else:
         st.subheader("🔑 Login")
@@ -152,6 +171,6 @@ elif escolha == "Login":
                 u = autenticar(usuario, senha)
                 if u:
                     st.session_state.usuario = u
-                    st.rerun()   # corrigido
+                    st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos!")
