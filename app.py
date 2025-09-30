@@ -38,7 +38,12 @@ def autenticar(usuario, senha):
 
 # ---------------- Funções Checklist ----------------
 def salvar_checklist(dados):
-    checklists_table.create(dados)
+    try:
+        return checklists_table.create(dados)
+    except Exception as e:
+        st.error("❌ Erro ao salvar checklist")
+        st.write("Dados enviados:", dados)
+        st.exception(e)
 
 def obter_ultima_troca():
     registros = trocaoleo_table.all(sort=["-data"])
@@ -49,7 +54,7 @@ def obter_ultima_troca():
 def salvar_troca_oleo(km):
     trocaoleo_table.create({
         "km": km,
-        "data": datetime.now().strftime("%d/%m/%Y %H:%M")
+        "data": datetime.now().isoformat()
     })
 
 # ---------------- Interface ----------------
@@ -108,9 +113,9 @@ elif escolha == "Login":
         comb = st.radio("Nível de combustível", ["1/4", "1/2", "3/4", "Cheio"])
 
         st.subheader("🧯 Oxigênio")
-        ox1 = st.number_input("Oxigênio Grande 1 (PSI)", min_value=0, step=1)
-        ox2 = st.number_input("Oxigênio Grande 2 (PSI)", min_value=0, step=1)
-        oxp = st.number_input("Oxigênio Portátil (PSI)", min_value=0, step=1)
+        ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
+        ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
+        oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
 
         st.subheader("⚠️ Avarias encontradas")
         avarias = st.text_area("Descreva as avarias (se houver)", "")
@@ -120,16 +125,16 @@ elif escolha == "Login":
                 st.error("Preencha todos os campos obrigatórios!")
             else:
                 dados = {
-                    "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "Data": datetime.now().isoformat(),
                     "Condutor": st.session_state.usuario["nome"],
-                    "Matrícula": st.session_state.usuario["matricula"],
+                    "Matricula": st.session_state.usuario["matricula"],  # sem acento
                     "Placa": placa,
                     "Prefixo": prefixo,
                     "Quilometragem": km,
-                    "Combustível": comb,
-                    "Oxigênio Grande 1": ox1,
-                    "Oxigênio Grande 2": ox2,
-                    "Oxigênio Portátil": oxp,
+                    "Combustivel": comb,  # sem acento
+                    "Oxigenio Grande 1": ox1,
+                    "Oxigenio Grande 2": ox2,
+                    "Oxigenio Portatil": oxp,
                     "Avarias": avarias if avarias else "Nenhuma"
                 }
                 salvar_checklist(dados)
