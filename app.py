@@ -244,8 +244,35 @@ elif st.session_state.usuario:
         ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
         oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
 
-        st.markdown("#### Avarias encontradas")
-        avarias = st.text_area("Descreva as avarias (se houver)", "")
+        st.markdown("#### Pneus")
+        pneu_dd = st.selectbox("Pneu dianteiro direito", ["Ruim", "Bom", "Otimo"])
+        pneu_de = st.selectbox("Pneu dianteiro esquerdo", ["Ruim", "Bom", "Otimo"])
+        pneu_td = st.selectbox("Pneu traseiro direito", ["Ruim", "Bom", "Otimo"])
+        pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
+
+        st.markdown("#### Checagem de avarias (imagem guia)")
+        # Coloque um arquivo 'ambulancia.png' na mesma pasta do app.py
+        try:
+            st.image("ambulancia.png", caption="Guia visual da ambulancia para checagem")
+        except Exception:
+            st.info("Adicione um arquivo 'ambulancia.png' na pasta do app para exibir a imagem guia.")
+
+        st.markdown("#### Fotos da viatura (opcional, apenas visualizacao)")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            foto_frente = st.file_uploader("Foto da frente", type=["jpg", "jpeg", "png"])
+            if foto_frente:
+                st.image(foto_frente, caption="Frente", use_column_width=True)
+            foto_direita = st.file_uploader("Foto lateral direita", type=["jpg", "jpeg", "png"])
+            if foto_direita:
+                st.image(foto_direita, caption="Lateral direita", use_column_width=True)
+        with col_f2:
+            foto_traseira = st.file_uploader("Foto da traseira", type=["jpg", "jpeg", "png"])
+            if foto_traseira:
+                st.image(foto_traseira, caption="Traseira", use_column_width=True)
+            foto_esquerda = st.file_uploader("Foto lateral esquerda", type=["jpg", "jpeg", "png"])
+            if foto_esquerda:
+                st.image(foto_esquerda, caption="Lateral esquerda", use_column_width=True)
 
         if st.button("Salvar Checklist"):
             if km <= 0:
@@ -262,12 +289,17 @@ elif st.session_state.usuario:
                     "OxigenioGrande1": int(ox1),
                     "OxigenioGrande2": int(ox2),
                     "OxigenioPortatil": int(oxp),
-                    "Avarias": (avarias.strip() if avarias else "Nenhuma"),
+                    # Pneus (crie estes campos no Airtable)
+                    "pneu_dianteiro_direito": pneu_dd,
+                    "pneu_dianteiro_esquerdo": pneu_de,
+                    "pneu_traseiro_direito": pneu_td,
+                    "pneu_traseiro_esquerdo": pneu_te,
                     "TipoServico": tipo_escolhido
                 }
                 salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
+                # Aviso de troca de oleo
                 ultima_troca = obter_ultima_troca()
                 proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
                     ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
