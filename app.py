@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from pyairtable import Table
 
-# ====================== Configuracao Airtable ======================
+# ---------------- Configuracao Airtable ----------------
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
 BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 
@@ -17,125 +17,65 @@ checklists_table = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
 trocaoleo_table  = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
 viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 
-# ====================== Mapeamento de campos ======================
-# Ajuste estes nomes para corresponder exatamente às colunas do seu Airtable
-VIATURAS_FIELDS = {
-    "placa":        "Placa",
-    "prefixo":      "Prefixo",
-    "status":       "Status",
-    "observacoes":  "Observacoes",      # troque para "Observações" se for o caso
-    "tipo_servico": "Tipo de Servico"   # troque para "Tipo de Serviço" se for o caso
-}
-
-CHECKLIST_FIELDS = {
-    "data":               "Data",
-    "condutor":           "Condutor",
-    "matricula":          "Matricula",
-    "placa":              "Placa",
-    "prefixo":            "Prefixo",
-    "quilometragem":      "Quilometragem",
-    "combustivel":        "Combustivel",
-    "oxigenio_grande_1":  "OxigenioGrande1",
-    "oxigenio_grande_2":  "OxigenioGrande2",
-    "oxigenio_portatil":  "OxigenioPortatil",
-    "avarias":            "Avarias",
-    "tipo_servico":       "Tipo de Servico"
-}
-
-TROCAOLEO_FIELDS = {
-    "km":   "km",
-    "data": "data"
-}
-
-USUARIOS_FIELDS = {
-    "usuario":   "usuario",
-    "senha":     "senha",
-    "nome":      "nome",
-    "matricula": "matricula",
-    "is_admin":  "is_admin"
-}
-
-# ====================== Constantes ======================
+# ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
 TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]
 
-# ====================== Utils ======================
-def safe_bool(value):
-    if isinstance(value, bool):
-        return value
-    return str(value).lower().strip() in ["true", "1", "yes", "sim"]
-
-# ====================== Usuarios ======================
+# ---------------- Usuarios ----------------
 def carregar_usuarios():
-    registros = usuarios_table.all()
-    return [r.get("fields", {}) for r in registros]
+    return [r.get("fields", {}) for r in usuarios_table.all()]
 
 def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
     usuarios_table.create({
-        USUARIOS_FIELDS["usuario"]:   usuario.strip(),
-        USUARIOS_FIELDS["senha"]:     senha.strip(),
-        USUARIOS_FIELDS["nome"]:      nome.strip(),
-        USUARIOS_FIELDS["matricula"]: matricula.strip(),
-        USUARIOS_FIELDS["is_admin"]:  bool(is_admin),
+        "usuario": usuario.strip(),
+        "senha": senha.strip(),
+        "nome": nome.strip(),
+        "matricula": matricula.strip(),
+        "is_admin": bool(is_admin),
     })
 
 def autenticar(usuario, senha):
     for u in carregar_usuarios():
-        if u.get(USUARIOS_FIELDS["usuario"]) == usuario and u.get(USUARIOS_FIELDS["senha"]) == senha:
+        if u.get("usuario") == usuario and u.get("senha") == senha:
             return {
-                "nome":      u.get(USUARIOS_FIELDS["nome"]),
-                "matricula": u.get(USUARIOS_FIELDS["matricula"]),
-                "admin":     safe_bool(u.get(USUARIOS_FIELDS["is_admin"], False)),
+                "nome": u.get("nome"),
+                "matricula": u.get("matricula"),
+                "admin": bool(u.get("is_admin", False))
             }
     return None
 
-# ====================== Viaturas ======================
+# ---------------- Viaturas ----------------
 def carregar_viaturas():
-    registros = viaturas_table.all()
-    return [r.get("fields", {}) for r in registros]
+    return [r.get("fields", {}) for r in viaturas_table.all()]
 
 def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
     viaturas_table.create({
-        VIATURAS_FIELDS["placa"]:        placa.strip().upper(),
-        VIATURAS_FIELDS["prefixo"]:      prefixo.strip(),
-        VIATURAS_FIELDS["status"]:       status,
-        VIATURAS_FIELDS["observacoes"]:  (obs.strip() if obs else ""),
-        VIATURAS_FIELDS["tipo_servico"]: tipo_servico
+        "Placa": placa.strip().upper(),
+        "Prefixo": prefixo.strip(),
+        "Status": status,
+        "Observacoes": obs.strip() if obs else "",
+        "Tipo de Servico": tipo_servico   # ajuste se no Airtable estiver diferente
     })
 
-def atualizar_status_viatura(placa, novo_status):
-    registros = viaturas_table.all()
-    for r in registros:
-        fields = r.get("fields", {})
-        if fields.get(VIATURAS_FIELDS["placa"], "").upper() == (placa or "").strip().upper():
-            viaturas_table.update(r["id"], {VIATURAS_FIELDS["status"]: novo_status})
-            return True
-    return False
-
-# ====================== Troca de oleo ======================
+# ---------------- Troca de oleo ----------------
 def obter_ultima_troca():
-    registros = trocaoleo_table.all(sort=[f'-{TROCAOLEO_FIELDS["data"]}'])
+    registros = trocaoleo_table.all(sort=["-data"])
     if registros:
-        return int(registros[0]["fields"].get(TROCAOLEO_FIELDS["km"], 0))
+        return int(registros[0]["fields"].get("km", 0))
     return 0
 
 def salvar_troca_oleo(km):
     trocaoleo_table.create({
-        TROCAOLEO_FIELDS["km"]:   int(km),
-        TROCAOLEO_FIELDS["data"]: datetime.now().isoformat(),
+        "km": int(km),
+        "data": datetime.now().isoformat(),
     })
 
-# ====================== Checklist ======================
+# ---------------- Checklist ----------------
 def salvar_checklist(dados):
-    try:
-        return checklists_table.create(dados, typecast=True)
-    except Exception as e:
-        st.error("Erro ao salvar checklist")
-        st.write("Dados enviados:", dados)
-        st.exception(e)
+    checklists_table.create(dados, typecast=True)
 
-# ====================== UI ======================
+# ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
 st.title("🚑 Check List Ambulancia SAMU/SOCIAL")
 
@@ -144,7 +84,7 @@ if "usuario" not in st.session_state:
 if "tela" not in st.session_state:
     st.session_state.tela = "login"
 
-# ====================== Tela de cadastro ======================
+# ---------------- Cadastro ----------------
 if st.session_state.tela == "cadastro":
     st.subheader("Cadastro de Usuario")
     usuario = st.text_input("Usuario")
@@ -153,26 +93,21 @@ if st.session_state.tela == "cadastro":
     matricula = st.text_input("Matricula")
     is_admin = st.checkbox("Administrador?")
 
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("Cadastrar"):
-            if not usuario or not senha or not nome or not matricula:
-                st.error("Preencha todos os campos!")
+            if usuario and senha and nome and matricula:
+                salvar_usuario(usuario, senha, nome, matricula, is_admin)
+                st.success("Usuario cadastrado com sucesso!")
             else:
-                usuarios = carregar_usuarios()
-                if any(u.get(USUARIOS_FIELDS["usuario"]) == usuario for u in usuarios):
-                    st.error("Usuario ja existe!")
-                else:
-                    salvar_usuario(usuario, senha, nome, matricula, is_admin)
-                    st.success("Usuario cadastrado com sucesso!")
-    with col2:
+                st.error("Preencha todos os campos!")
+    with c2:
         if st.button("Voltar para Login"):
             st.session_state.tela = "login"
             st.rerun()
 
-# ====================== Tela de login / app ======================
+# ---------------- Login ----------------
 elif st.session_state.tela == "login":
-    # Se NAO autenticado: mostra login
     if not st.session_state.usuario:
         st.subheader("Login")
         usuario = st.text_input("Usuario")
@@ -191,14 +126,59 @@ elif st.session_state.tela == "login":
             if st.button("Cadastrar"):
                 st.session_state.tela = "cadastro"
                 st.rerun()
-
-    # Se autenticado: mostra app
     else:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-        # Administração (somente admins)
-        if st.session_state.usuario.get("admin", False):
-            st.sidebar.subheader("Administracao")
-            st.sidebar.subheader("Gestao de Viaturas")
-            placa = st.sidebar.text_input("Placa")
-            prefixo = st.sidebar.text_input("Prefixo")
+        # Escolha de viatura
+        viaturas = carregar_viaturas()
+        viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
+
+        if viaturas_ativas:
+            tipos_disponiveis = [t for t in TIPOS_SERVICO if any(v.get("Tipo de Servico") == t for v in viaturas_ativas)]
+            tipo_escolhido = st.selectbox("Selecione o tipo de servico", tipos_disponiveis)
+
+            viaturas_filtradas = [v for v in viaturas_ativas if v.get("Tipo de Servico") == tipo_escolhido]
+            if viaturas_filtradas:
+                opcoes = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_filtradas]
+                escolha = st.selectbox("Selecione a viatura", opcoes)
+                viatura = next(v for v in viaturas_filtradas if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha)
+                placa = viatura.get("Placa")
+                prefixo = viatura.get("Prefixo")
+
+                # Checklist
+                st.subheader("Checklist da Viatura")
+                km = st.number_input("Quilometragem atual", min_value=0, step=1)
+                comb = st.radio("Nivel de combustivel", OPCOES_COMBUSTIVEL, horizontal=True)
+                ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
+                ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
+                oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
+                avarias = st.text_area("Avarias encontradas", "")
+
+                if st.button("Salvar Checklist"):
+                    dados = {
+                        "Data": datetime.now().isoformat(),
+                        "Condutor": st.session_state.usuario["nome"],
+                        "Matricula": st.session_state.usuario["matricula"],
+                        "Placa": placa,
+                        "Prefixo": prefixo,
+                        "Quilometragem": int(km),
+                        "Combustivel": comb,
+                        "OxigenioGrande1": int(ox1),
+                        "OxigenioGrande2": int(ox2),
+                        "OxigenioPortatil": int(oxp),
+                        "Avarias": avarias if avarias else "Nenhuma",
+                        "Tipo de Servico": tipo_escolhido
+                    }
+                    salvar_checklist(dados)
+                    st.success("Checklist registrado com sucesso!")
+
+                    ultima_troca = obter_ultima_troca()
+                    proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO if ultima_troca else ((int(km)//INTERVALO_TROCA_OLEO)+1)*INTERVALO_TROCA_OLEO
+                    if int(km) >= proxima_troca:
+                        st.error(f"Atenção: a viatura atingiu {int(km)} km. Necessaria troca de oleo.")
+                    else:
+                        st.info(f"Faltam {proxima_troca-int(km)} km para a proxima troca de oleo.")
+
+        if st.button("Sair"):
+            st.session_state.usuario = None
+            st.rerun()
