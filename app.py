@@ -7,7 +7,6 @@ from pyairtable import Table
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
 BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 
-# IDs de tabelas no secrets.toml
 USUARIOS_TABLE_ID = st.secrets["connections"]["airtable"]["usuarios_table_id"]
 CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id"]
 TROCAOLEO_TABLE_ID = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
@@ -21,7 +20,7 @@ viaturas_table = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 OPCOES_COMBUSTIVEL = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO = ["SAMU", "Remoção", "Van Social"]
+TIPOS_SERVICO = ["SAMU", "Remocao", "Van Social"]
 
 # ---------------- Utils ----------------
 def safe_bool(value):
@@ -61,11 +60,11 @@ def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
         "Placa": placa.strip().upper(),
         "Prefixo": prefixo.strip(),
         "Status": status,
-        "Observações": obs.strip() if obs else "",
-        "Tipo de Serviço": tipo_servico
+        "Observacoes": obs.strip() if obs else "",
+        "TipoServico": tipo_servico
     })
 
-# ---------------- Troca de óleo ----------------
+# ---------------- Troca de oleo ----------------
 def obter_ultima_troca():
     registros = trocaoleo_table.all(sort=["-data"])
     if registros:
@@ -89,7 +88,7 @@ def salvar_checklist(dados):
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
-st.title("🚑 Check List Ambulância SAMU/SOCIAL")
+st.title("🚑 Check List Ambulancia SAMU/SOCIAL")
 
 menu = ["Login", "Cadastro"]
 escolha = st.sidebar.selectbox("Menu", menu)
@@ -99,11 +98,11 @@ if "usuario" not in st.session_state:
 
 # ---------------- Cadastro ----------------
 if escolha == "Cadastro":
-    st.subheader("📋 Cadastro de Usuário")
-    usuario = st.text_input("Usuário")
+    st.subheader("📋 Cadastro de Usuario")
+    usuario = st.text_input("Usuario")
     senha = st.text_input("Senha", type="password")
     nome = st.text_input("Nome completo")
-    matricula = st.text_input("Matrícula")
+    matricula = st.text_input("Matricula")
     is_admin = st.checkbox("Administrador?")
 
     if st.button("Cadastrar"):
@@ -112,42 +111,40 @@ if escolha == "Cadastro":
         else:
             usuarios = carregar_usuarios()
             if any(u.get("usuario") == usuario for u in usuarios):
-                st.error("Usuário já existe!")
+                st.error("Usuario ja existe!")
             else:
                 salvar_usuario(usuario, senha, nome, matricula, is_admin)
-                st.success("Usuário cadastrado com sucesso! Vá para Login.")
+                st.success("Usuario cadastrado com sucesso! Va para Login.")
 
 # ---------------- Login ----------------
 elif escolha == "Login":
     if st.session_state.usuario:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-        # Administração (somente admins)
+        # Admin
         if st.session_state.usuario.get("admin", False):
-            st.sidebar.subheader("⚙️ Administração")
-
-            # Gestão de viaturas
-            st.sidebar.subheader("🚐 Gestão de Viaturas")
+            st.sidebar.subheader("⚙️ Administracao")
+            st.sidebar.subheader("🚐 Gestao de Viaturas")
             placa = st.sidebar.text_input("Placa")
             prefixo = st.sidebar.text_input("Prefixo")
             status = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
-            tipo_servico = st.sidebar.selectbox("Tipo de Serviço", TIPOS_SERVICO)
-            obs = st.sidebar.text_area("Observações")
+            tipo_servico = st.sidebar.selectbox("Tipo de Servico", TIPOS_SERVICO)
+            obs = st.sidebar.text_area("Observacoes")
 
             if st.sidebar.button("Adicionar Viatura"):
                 salvar_viatura(placa, prefixo, status, obs, tipo_servico)
                 st.sidebar.success("Viatura cadastrada!")
 
-        # Seleção de viatura para motorista
+        # Escolha de viatura
         st.subheader("🚐 Escolha a Viatura")
         viaturas = carregar_viaturas()
         viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
 
         if viaturas_ativas:
-            tipos_disponiveis = sorted(set(v.get("Tipo de Serviço", "Outro") for v in viaturas_ativas))
-            tipo_escolhido = st.selectbox("Selecione o tipo de serviço", tipos_disponiveis)
+            tipos_disponiveis = sorted(set(v.get("TipoServico", "Outro") for v in viaturas_ativas))
+            tipo_escolhido = st.selectbox("Selecione o tipo de servico", tipos_disponiveis)
 
-            viaturas_filtradas = [v for v in viaturas_ativas if v.get("Tipo de Serviço") == tipo_escolhido]
+            viaturas_filtradas = [v for v in viaturas_ativas if v.get("TipoServico") == tipo_escolhido]
 
             if viaturas_filtradas:
                 opcoes_viaturas = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_filtradas]
@@ -156,29 +153,29 @@ elif escolha == "Login":
                 placa = viatura_selecionada.get("Placa", "")
                 prefixo = viatura_selecionada.get("Prefixo", "")
             else:
-                st.warning("Nenhuma viatura ativa para esse tipo de serviço.")
+                st.warning("Nenhuma viatura ativa para esse tipo de servico.")
                 placa, prefixo = None, None
         else:
             st.error("Nenhuma viatura ativa cadastrada!")
             placa, prefixo = None, None
 
-        # Formulário de checklist
+        # Checklist
         if placa and prefixo:
             st.subheader("🧾 Checklist da Viatura")
             km = st.number_input("Quilometragem atual", min_value=0, step=1)
-            comb = st.radio("Nível de combustível", OPCOES_COMBUSTIVEL, horizontal=True)
+            comb = st.radio("Nivel de combustivel", OPCOES_COMBUSTIVEL, horizontal=True)
 
-            st.subheader("🧯 Oxigênio")
-            ox1 = st.number_input("Oxigênio Grande 1 (PSI)", min_value=0, step=1)
-            ox2 = st.number_input("Oxigênio Grande 2 (PSI)", min_value=0, step=1)
-            oxp = st.number_input("Oxigênio Portátil (PSI)", min_value=0, step=1)
+            st.subheader("🧯 Oxigenio")
+            ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
+            ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
+            oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
 
             st.subheader("⚠️ Avarias encontradas")
             avarias = st.text_area("Descreva as avarias (se houver)", "")
 
             if st.button("💾 Salvar Checklist"):
                 if km <= 0:
-                    st.error("Informe uma quilometragem válida!")
+                    st.error("Informe uma quilometragem valida!")
                 else:
                     dados = {
                         "Data": datetime.now().isoformat(),
@@ -187,8 +184,16 @@ elif escolha == "Login":
                         "Placa": placa,
                         "Prefixo": prefixo,
                         "Quilometragem": int(km),
-                        "Combustível": comb,
-                        "Oxigênio Grande 1": int(ox1),
-                        "Oxigênio Grande 2": int(ox2),
-                        "Oxigênio Portátil": int(oxp),
-                        "Avarias": avarias.strip() if
+                        "Combustivel": comb,
+                        "OxigenioGrande1": int(ox1),
+                        "OxigenioGrande2": int(ox2),
+                        "OxigenioPortatil": int(oxp),
+                        "Avarias": avarias.strip() if avarias else "Nenhuma",
+                        "TipoServico": tipo_escolhido
+                    }
+                    salvar_checklist(dados)
+                    st.success("Checklist registrado com sucesso!")
+
+                    # Aviso troca de oleo
+                    ultima_troca = obter_ultima_troca()
+                    if ultima_troca > 0
