@@ -191,13 +191,4 @@ elif escolha == "Login":
                         "Oxigênio Grande 1": int(ox1),
                         "Oxigênio Grande 2": int(ox2),
                         "Oxigênio Portátil": int(oxp),
-                        "Avarias": avarias.strip() if avarias else "Nenhuma",
-                        "Tipo de Serviço": tipo_escolhido
-                    }
-                    salvar_checklist(dados)
-                    st.success("Checklist registrado com sucesso!")
-
-                    # Aviso de troca de óleo
-                    ultima_troca = obter_ultima_troca()
-                    if ultima_troca > 0:
-                        pro
+                        "Avarias": avarias.strip() if
