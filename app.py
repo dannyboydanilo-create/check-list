@@ -10,6 +10,7 @@ BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 usuarios_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["usuarios_table_id"])
 checklists_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["checklists_table_id"])
 trocaoleo_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["trocaoleo_table_id"])
+viaturas_table = Table(API_KEY, BASE_ID, st.secrets["connections"]["airtable"]["viaturas_table_id"])
 
 INTERVALO_TROCA_OLEO = 10000
 
@@ -36,10 +37,23 @@ def autenticar(usuario, senha):
             return u
     return None
 
+# ---------------- Funções Viaturas ----------------
+def carregar_viaturas():
+    registros = viaturas_table.all()
+    return [r["fields"] for r in registros]
+
+def salvar_viatura(placa, prefixo, status="Ativa", obs=""):
+    viaturas_table.create({
+        "Placa": placa.strip(),
+        "Prefixo": prefixo.strip(),
+        "Status": status,
+        "Observações": obs
+    })
+
 # ---------------- Funções Checklist ----------------
 def salvar_checklist(dados):
     try:
-        return checklists_table.create(dados)
+        return checklists_table.create(dados, typecast=True)
     except Exception as e:
         st.error("❌ Erro ao salvar checklist")
         st.write("Dados enviados:", dados)
@@ -91,80 +105,92 @@ elif escolha == "Login":
     if st.session_state.usuario:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-        # Administração de usuários (somente admins)
+        # Administração de usuários e viaturas (somente admins)
         if st.session_state.usuario.get("admin", False):
-            st.sidebar.subheader("⚙️ Administração de Usuários")
+            st.sidebar.subheader("⚙️ Administração")
+            
+            # Usuários
             usuarios = carregar_usuarios()
             if usuarios:
                 df = pd.DataFrame(usuarios)
                 csv = df.to_csv(index=False).encode("utf-8")
                 st.sidebar.download_button(
-                    label="⬇️ Baixar usuários (Airtable)",
+                    label="⬇️ Baixar usuários",
                     data=csv,
                     file_name="usuarios.csv",
                     mime="text/csv"
                 )
 
+            # Viaturas
+            st.sidebar.subheader("🚐 Gestão de Viaturas")
+            placa = st.sidebar.text_input("Placa")
+            prefixo = st.sidebar.text_input("Prefixo")
+            status = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
+            obs = st.sidebar.text_area("Observações")
+            if st.sidebar.button("Adicionar Viatura"):
+                salvar_viatura(placa, prefixo, status, obs)
+                st.sidebar.success("Viatura cadastrada!")
+
         # Formulário checklist
-        st.subheader("🚐 Dados da Viatura")
-        placa = st.text_input("Placa da viatura")
-        prefixo = st.text_input("Prefixo da viatura")
-        km = st.number_input("Quilometragem atual", min_value=0, step=1)
-        comb = st.radio("Nível de combustível", ["1/4", "1/2", "3/4", "Cheio"])
+        st.subheader("🚐 Escolha a Viatura")
+        viaturas = carregar_viaturas()
+        viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
 
-        st.subheader("🧯 Oxigênio")
-        ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
-        ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
-        oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
+        if viaturas_ativas:
+            escolha = st.selectbox("Selecione a viatura", [f"{v['Prefixo']} - {v['Placa']}" for v in viaturas_ativas])
+            viatura_selecionada = next(v for v in viaturas_ativas if f"{v['Prefixo']} - {v['Placa']}" == escolha)
+            placa = viatura_selecionada["Placa"]
+            prefixo = viatura_selecionada["Prefixo"]
+        else:
+            st.error("Nenhuma viatura ativa cadastrada!")
+            placa, prefixo = None, None
 
-        st.subheader("⚠️ Avarias encontradas")
-        avarias = st.text_area("Descreva as avarias (se houver)", "")
+        if placa and prefixo:
+            st.subheader("🚐 Dados da Viatura")
+            km = st.number_input("Quilometragem atual", min_value=0, step=1)
+            comb = st.radio("Nível de combustível", ["1/4", "1/2", "3/4", "Cheio"])
 
-        if st.button("💾 Salvar Checklist"):
-            if not placa or not prefixo or km == 0:
-                st.error("Preencha todos os campos obrigatórios!")
-            else:
-                dados = {
-                    "Data": datetime.now().isoformat(),
-                    "Condutor": st.session_state.usuario["nome"],
-                    "Matricula": st.session_state.usuario["matricula"],  # sem acento
-                    "Placa": placa,
-                    "Prefixo": prefixo,
-                    "Quilometragem": km,
-                    "Combustivel": comb,  # sem acento
-                    "Oxigenio Grande 1": ox1,
-                    "Oxigenio Grande 2": ox2,
-                    "Oxigenio Portatil": oxp,
-                    "Avarias": avarias if avarias else "Nenhuma"
-                }
-                salvar_checklist(dados)
-                st.success("Checklist registrado com sucesso!")
+            st.subheader("🧯 Oxigênio")
+            ox1 = st.number_input("Oxigênio Grande 1 (PSI)", min_value=0, step=1)
+            ox2 = st.number_input("Oxigênio Grande 2 (PSI)", min_value=0, step=1)
+            oxp = st.number_input("Oxigênio Portátil (PSI)", min_value=0, step=1)
 
-                # Aviso de troca de óleo
-                ultima_troca = obter_ultima_troca()
-                proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO if ultima_troca > 0 else ((km // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
-                if km >= proxima_troca:
-                    st.error(f"⚠️ Atenção: a viatura atingiu {km} km. Necessária troca de óleo.")
+            st.subheader("⚠️ Avarias encontradas")
+            avarias = st.text_area("Descreva as avarias (se houver)", "")
+
+            if st.button("💾 Salvar Checklist"):
+                if km == 0:
+                    st.error("Preencha a quilometragem!")
                 else:
-                    faltam = proxima_troca - km
-                    st.info(f"⏳ Faltam {faltam} km para a próxima troca de óleo.")
+                    dados = {
+                        "Data": datetime.now().isoformat(),
+                        "Condutor": st.session_state.usuario["nome"],
+                        "Matricula": st.session_state.usuario["matricula"],
+                        "Placa": placa,
+                        "Prefixo": prefixo,
+                        "Quilometragem": km,
+                        "Combustível": comb,
+                        "Oxigênio Grande 1": ox1,
+                        "Oxigênio Grande 2": ox2,
+                        "Oxigênio Portátil": oxp,
+                        "Avarias": avarias if avarias else "Nenhuma"
+                    }
+                    salvar_checklist(dados)
+                    st.success("Checklist registrado com sucesso!")
 
-        if st.button("🔧 Registrar troca de óleo (Admin)"):
-            salvar_troca_oleo(km)
-            st.success(f"Troca de óleo registrada em {km} km.")
+                    # Aviso de troca de óleo
+                    ultima_troca = obter_ultima_troca()
+                    proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO if ultima_troca > 0 else ((km // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+                    if km >= proxima_troca:
+                        st.error(f"⚠️ Atenção: a viatura atingiu {km} km. Necessária troca de óleo.")
+                    else:
+                        faltam = proxima_troca - km
+                        st.info(f"⏳ Faltam {faltam} km para a próxima troca de óleo.")
+
+            if st.button("🔧 Registrar troca de óleo (Admin)"):
+                salvar_troca_oleo(km)
+                st.success(f"Troca de óleo registrada em {km} km.")
 
         if st.button("Sair"):
             st.session_state.usuario = None
-            st.rerun()
-
-    else:
-        st.subheader("🔑 Login")
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
-            u = autenticar(usuario, senha)
-            if u:
-                st.session_state.usuario = u
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos!")
+            st.rerun
