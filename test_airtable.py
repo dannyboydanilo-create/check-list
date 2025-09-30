@@ -11,4 +11,5 @@ try:
     registros = table.all(max_records=1)
     st.write("✅ Conexão OK:", registros)
 except Exception as e:
+
     st.error(f"❌ Erro: {e}")
