@@ -197,7 +197,7 @@ elif escolha == "Login":
 
                     # Aviso de troca de óleo
                     ultima_troca = obter_ultima_troca()
-                    proxima_troca = (
-                        ultima_troca + INTERVALO_TROCA_OLEO
-                        if ultima_troca > 0
-                        else ((int(km) // INTERVALO_TROCA_O
+                    if ultima_troca > 0:
+                        proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO
+                    else:
+                        proxima_troca = ((int(km) // INTER
