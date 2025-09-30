@@ -20,7 +20,7 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]  # sem "Outro"
+TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]  # sem acentos
 
 # ---------------- Usuarios ----------------
 def carregar_usuarios():
@@ -75,8 +75,9 @@ def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
             "Observacoes": (obs.strip() if obs else ""),
             "TipoServico": tipo_servico
         })
+        st.sidebar.success("Viatura cadastrada!")
     except Exception as e:
-        st.error(f"Erro ao cadastrar viatura: {e}")
+        st.sidebar.error(f"Erro ao cadastrar viatura: {e}")
 
 def atualizar_status_viatura(placa, novo_status):
     try:
@@ -108,6 +109,7 @@ def salvar_troca_oleo(km):
             "km": int(km),
             "data": datetime.now().isoformat(),
         })
+        st.success(f"Troca de oleo registrada em {int(km)} km.")
     except Exception as e:
         st.error(f"Erro ao salvar troca de oleo: {e}")
 
@@ -122,7 +124,7 @@ def salvar_checklist(dados):
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
 st.title("🚑 Check List Ambulancia SAMU/SOCIAL")
 
-# Estado de sessao
+# Estado
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 if "tela" not in st.session_state:
@@ -187,9 +189,8 @@ elif st.session_state.usuario:
 
         if st.sidebar.button("Adicionar Viatura"):
             salvar_viatura(placa, prefixo, status, obs, tipo_servico)
-            # feedback de sucesso/erro ja tratado na funcao
 
-        # Opcional: listar e alterar status
+        st.sidebar.markdown("---")
         viaturas_admin = carregar_viaturas()
         if viaturas_admin:
             st.sidebar.markdown("### Viaturas cadastradas")
@@ -203,7 +204,7 @@ elif st.session_state.usuario:
             else:
                 st.sidebar.error("Viatura nao encontrada pela placa.")
 
-    # Escolha de viatura
+    # Escolha de viatura (tipo primeiro, depois viatura)
     st.subheader("Escolha a Viatura")
     viaturas = carregar_viaturas()
     viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
@@ -214,15 +215,17 @@ elif st.session_state.usuario:
             t for t in TIPOS_SERVICO
             if any(v.get("TipoServico") == t for v in viaturas_ativas)
         ]
-        if not tipos_disponiveis:
-            st.warning("Nenhum tipo de servico disponivel nas viaturas ativas.")
-        else:
-            tipo_escolhido = st.selectbox("Selecione o tipo de servico", tipos_disponiveis)
+        tipo_escolhido = st.selectbox("Selecione o tipo de servico", ["-- Selecione --"] + tipos_disponiveis)
+
+        if tipo_escolhido and tipo_escolhido != "-- Selecione --":
             viaturas_filtradas = [v for v in viaturas_ativas if v.get("TipoServico") == tipo_escolhido]
             if viaturas_filtradas:
                 opcoes = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_filtradas]
                 escolha = st.selectbox("Selecione a viatura", opcoes)
-                viatura = next(v for v in viaturas_filtradas if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha)
+                viatura = next(
+                    v for v in viaturas_filtradas
+                    if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha
+                )
                 placa = viatura.get("Placa")
                 prefixo = viatura.get("Prefixo")
             else:
@@ -231,7 +234,7 @@ elif st.session_state.usuario:
         st.info("Cadastre viaturas ativas para continuar.")
 
     # Checklist
-    if placa and prefixo and tipo_escolhido:
+    if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
         km = st.number_input("Quilometragem atual", min_value=0, step=1)
         comb = st.radio("Nivel de combustivel", OPCOES_COMBUSTIVEL, horizontal=True)
@@ -265,7 +268,6 @@ elif st.session_state.usuario:
                 salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
-                # Aviso de troca de oleo
                 ultima_troca = obter_ultima_troca()
                 proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
                     ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
@@ -283,7 +285,6 @@ elif st.session_state.usuario:
                     st.error("Informe uma quilometragem valida para registrar a troca!")
                 else:
                     salvar_troca_oleo(km)
-                    st.success(f"Troca de oleo registrada em {int(km)} km.")
 
     # Sair
     if st.button("Sair"):
