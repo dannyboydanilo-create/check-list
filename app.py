@@ -200,4 +200,4 @@ elif escolha == "Login":
                     if ultima_troca > 0:
                         proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO
                     else:
-                        proxima_troca = ((int(km) // INTER
+                        proxima_troca = ((int(km
