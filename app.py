@@ -20,7 +20,7 @@ viaturas_table = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
-OPCOES_COMBUSTIVEL = ["1/4", "1/2", "3/4", "Cheio"]  # devem existir no Single select do Airtable
+OPCOES_COMBUSTIVEL = ["1/4", "1/2", "3/4", "Cheio"]
 
 # ---------------- Utils ----------------
 def safe_bool(value):
@@ -55,25 +55,14 @@ def carregar_viaturas():
     registros = viaturas_table.all()
     return [r.get("fields", {}) for r in registros]
 
-def salvar_viatura(placa, prefixo, status="Ativa", obs=""):
-    if not placa or not prefixo:
-        raise ValueError("Placa e Prefixo são obrigatórios")
+def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
     viaturas_table.create({
         "Placa": placa.strip().upper(),
         "Prefixo": prefixo.strip(),
         "Status": status,
         "Observações": obs.strip() if obs else "",
+        "Tipo de Serviço": tipo_servico
     })
-
-def atualizar_status_viatura(placa, novo_status):
-    # Atualiza status pela placa
-    registros = viaturas_table.all()
-    for r in registros:
-        fields = r.get("fields", {})
-        if fields.get("Placa", "").upper() == placa.upper():
-            viaturas_table.update(r["id"], {"Status": novo_status})
-            return True
-    return False
 
 # ---------------- Troca de óleo ----------------
 def obter_ultima_troca():
@@ -91,7 +80,6 @@ def salvar_troca_oleo(km):
 # ---------------- Checklist ----------------
 def salvar_checklist(dados):
     try:
-        # typecast=True ajuda a casar valores com campos do tipo select (não cria opções novas)
         return checklists_table.create(dados, typecast=True)
     except Exception as e:
         st.error("❌ Erro ao salvar checklist")
@@ -128,7 +116,7 @@ if escolha == "Cadastro":
                 salvar_usuario(usuario, senha, nome, matricula, is_admin)
                 st.success("Usuário cadastrado com sucesso! Vá para Login.")
 
-# ---------------- Login e após login ----------------
+# ---------------- Login ----------------
 elif escolha == "Login":
     if st.session_state.usuario:
         st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
@@ -136,46 +124,18 @@ elif escolha == "Login":
         # Administração (somente admins)
         if st.session_state.usuario.get("admin", False):
             st.sidebar.subheader("⚙️ Administração")
-            # Usuários
-            usuarios = carregar_usuarios()
-            if usuarios:
-                df_users = pd.DataFrame(usuarios)
-                csv_users = df_users.to_csv(index=False).encode("utf-8")
-                st.sidebar.download_button(
-                    label="⬇️ Baixar usuários",
-                    data=csv_users,
-                    file_name="usuarios.csv",
-                    mime="text/csv"
-                )
 
             # Gestão de viaturas
             st.sidebar.subheader("🚐 Gestão de Viaturas")
-            placa_input = st.sidebar.text_input("Placa")
-            prefixo_input = st.sidebar.text_input("Prefixo")
-            status_input = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
-            obs_input = st.sidebar.text_area("Observações")
-            if st.sidebar.button("Adicionar Viatura"):
-                try:
-                    salvar_viatura(placa_input, prefixo_input, status_input, obs_input)
-                    st.sidebar.success("Viatura cadastrada!")
-                except Exception as e:
-                    st.sidebar.error("Erro ao cadastrar viatura")
-                    st.sidebar.exception(e)
+            placa = st.sidebar.text_input("Placa")
+            prefixo = st.sidebar.text_input("Prefixo")
+            status = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
+            tipo_servico = st.sidebar.selectbox("Tipo de Serviço", ["SAMU", "Remoção", "Van Social"])
+            obs = st.sidebar.text_area("Observações")
 
-            # Listar viaturas
-            viaturas_list = carregar_viaturas()
-            if viaturas_list:
-                df_v = pd.DataFrame(viaturas_list)
-                st.sidebar.dataframe(df_v, use_container_width=True)
-                # Alterar status rápido
-                placa_status = st.sidebar.text_input("Placa para alterar status")
-                novo_status = st.sidebar.selectbox("Novo status", ["Ativa", "Inativa"])
-                if st.sidebar.button("Atualizar status"):
-                    ok = atualizar_status_viatura(placa_status, novo_status)
-                    if ok:
-                        st.sidebar.success("Status atualizado!")
-                    else:
-                        st.sidebar.error("Viatura não encontrada pela placa.")
+            if st.sidebar.button("Adicionar Viatura"):
+                salvar_viatura(placa, prefixo, status, obs, tipo_servico)
+                st.sidebar.success("Viatura cadastrada!")
 
         # Seleção de viatura para motorista
         st.subheader("🚐 Escolha a Viatura")
@@ -183,11 +143,19 @@ elif escolha == "Login":
         viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
 
         if viaturas_ativas:
-            opcoes = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_ativas]
-            escolha_viatura = st.selectbox("Selecione a viatura", opcoes)
-            viatura_selecionada = next(v for v in viaturas_ativas if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_viatura)
-            placa = viatura_selecionada.get("Placa", "")
-            prefixo = viatura_selecionada.get("Prefixo", "")
+            tipos = sorted(set(v.get("Tipo de Serviço", "Outro") for v in viaturas_ativas))
+            tipo_escolhido = st.selectbox("Selecione o tipo de serviço", tipos)
+
+            viaturas_filtradas = [v for v in viaturas_ativas if v.get("Tipo de Serviço") == tipo_escolhido]
+
+            if viaturas_filtradas:
+                escolha = st.selectbox("Selecione a viatura", [f"{v['Prefixo']} - {v['Placa']}" for v in viaturas_filtradas])
+                viatura_selecionada = next(v for v in viaturas_filtradas if f"{v['Prefixo']} - {v['Placa']}" == escolha)
+                placa = viatura_selecionada["Placa"]
+                prefixo = viatura_selecionada["Prefixo"]
+            else:
+                st.warning("Nenhuma viatura ativa para esse tipo de serviço.")
+                placa, prefixo = None, None
         else:
             st.error("Nenhuma viatura ativa cadastrada!")
             placa, prefixo = None, None
@@ -211,18 +179,18 @@ elif escolha == "Login":
                     st.error("Informe uma quilometragem válida!")
                 else:
                     dados = {
-                        # Use os nomes exatos das colunas no Airtable (com acento)
                         "Data": datetime.now().isoformat(),
                         "Condutor": st.session_state.usuario["nome"],
                         "Matricula": st.session_state.usuario["matricula"],
                         "Placa": placa,
                         "Prefixo": prefixo,
                         "Quilometragem": int(km),
-                        "Combustível": comb,                 # Single select com opções existentes
+                        "Combustível": comb,
                         "Oxigênio Grande 1": int(ox1),
                         "Oxigênio Grande 2": int(ox2),
                         "Oxigênio Portátil": int(oxp),
                         "Avarias": avarias.strip() if avarias else "Nenhuma",
+                        "Tipo de Serviço": tipo_escolhido
                     }
                     salvar_checklist(dados)
                     st.success("Checklist registrado com sucesso!")
@@ -230,31 +198,4 @@ elif escolha == "Login":
                     # Aviso de troca de óleo
                     ultima_troca = obter_ultima_troca()
                     proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO if ultima_troca > 0 else ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
-                    if int(km) >= proxima_troca:
-                        st.error(f"⚠️ Atenção: a viatura atingiu {km} km. Necessária troca de óleo.")
-                    else:
-                        faltam = proxima_troca - int(km)
-                        st.info(f"⏳ Faltam {faltam} km para a próxima troca de óleo.")
-
-            # Registrar troca de óleo (admin)
-            if st.session_state.usuario.get("admin", False):
-                if st.button("🔧 Registrar troca de óleo"):
-                    salvar_troca_oleo(km)
-                    st.success(f"Troca de óleo registrada em {km} km.")
-
-        # Sair
-        if st.button("Sair"):
-            st.session_state.usuario = None
-            st.rerun()
-
-    else:
-        st.subheader("🔑 Login")
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
-            u = autenticar(usuario, senha)
-            if u:
-                st.session_state.usuario = u
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos!")
+                    if int(km) >=
