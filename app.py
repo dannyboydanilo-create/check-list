@@ -20,7 +20,7 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]
+TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
 
 # ---------------- Usuarios ----------------
 def carregar_usuarios():
@@ -62,17 +62,17 @@ def carregar_viaturas():
 
 def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
     if not placa or not prefixo:
-        st.error("Placa e Prefixo sao obrigatorios.")
+        st.sidebar.error("Placa e Prefixo sao obrigatorios.")
         return
     if tipo_servico not in TIPOS_SERVICO:
-        st.error("Tipo de Servico invalido.")
+        st.sidebar.error("Tipo de Servico invalido.")
         return
     try:
         viaturas_table.create({
             "Placa": placa.strip().upper(),
             "Prefixo": prefixo.strip(),
             "Status": status,
-            "Observacoes": (obs.strip() if obs else ""),
+            "Observacoes": obs.strip() if obs else "",
             "TipoServico": tipo_servico
         })
         st.sidebar.success("Viatura cadastrada!")
@@ -250,29 +250,6 @@ elif st.session_state.usuario:
         pneu_td = st.selectbox("Pneu traseiro direito", ["Ruim", "Bom", "Otimo"])
         pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
 
-        st.markdown("#### Checagem de avarias (imagem guia)")
-        try:
-            st.image("ambulancia.png", caption="Guia visual da ambulancia para checagem")
-        except Exception:
-            st.info("Adicione um arquivo 'ambulancia.png' na pasta do app para exibir a imagem guia.")
-
-        st.markdown("#### Fotos da viatura (opcional, apenas visualizacao)")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            foto_frente = st.file_uploader("Foto da frente", type=["jpg", "jpeg", "png"])
-            if foto_frente:
-                st.image(foto_frente, caption="Frente", use_column_width=True)
-            foto_direita = st.file_uploader("Foto lateral direita", type=["jpg", "jpeg", "png"])
-            if foto_direita:
-                st.image(foto_direita, caption="Lateral direita", use_column_width=True)
-        with col_f2:
-            foto_traseira = st.file_uploader("Foto da traseira", type=["jpg", "jpeg", "png"])
-            if foto_traseira:
-                st.image(foto_traseira, caption="Traseira", use_column_width=True)
-            foto_esquerda = st.file_uploader("Foto lateral esquerda", type=["jpg", "jpeg", "png"])
-            if foto_esquerda:
-                st.image(foto_esquerda, caption="Lateral esquerda", use_column_width=True)
-
         if st.button("Salvar Checklist"):
             if km <= 0:
                 st.error("Informe uma quilometragem valida!")
@@ -297,6 +274,7 @@ elif st.session_state.usuario:
                 salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
+                # Aviso de troca de oleo
                 ultima_troca = obter_ultima_troca()
                 proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
                     ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
