@@ -19,28 +19,22 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
+TOLERANCIA_ALERTA    = 500
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
 TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
 
 # ---------------- Usuarios ----------------
 def carregar_usuarios():
-    try:
-        return [r.get("fields", {}) for r in usuarios_table.all()]
-    except Exception as e:
-        st.error(f"Erro ao carregar usuarios: {e}")
-        return []
+    return [r.get("fields", {}) for r in usuarios_table.all()]
 
 def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
-    try:
-        usuarios_table.create({
-            "usuario": usuario.strip(),
-            "senha": senha.strip(),
-            "nome": nome.strip(),
-            "matricula": matricula.strip(),
-            "is_admin": bool(is_admin),
-        })
-    except Exception as e:
-        st.error(f"Erro ao salvar usuario: {e}")
+    usuarios_table.create({
+        "usuario": usuario.strip(),
+        "senha": senha.strip(),
+        "nome": nome.strip(),
+        "matricula": matricula.strip(),
+        "is_admin": bool(is_admin),
+    })
 
 def autenticar(usuario, senha):
     for u in carregar_usuarios():
@@ -54,90 +48,63 @@ def autenticar(usuario, senha):
 
 # ---------------- Viaturas ----------------
 def carregar_viaturas():
-    try:
-        return [r.get("fields", {}) for r in viaturas_table.all()]
-    except Exception as e:
-        st.error(f"Erro ao carregar viaturas: {e}")
-        return []
+    return [r.get("fields", {}) for r in viaturas_table.all()]
 
 def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
     if not placa or not prefixo:
         st.sidebar.error("Placa e Prefixo sao obrigatorios.")
         return
-    if tipo_servico not in TIPOS_SERVICO:
-        st.sidebar.error("Tipo de Servico invalido.")
-        return
-    try:
-        viaturas_table.create({
-            "Placa": placa.strip().upper(),
-            "Prefixo": prefixo.strip(),
-            "Status": status,
-            "Observacoes": obs.strip() if obs else "",
-            "TipoServico": tipo_servico
-        })
-        st.sidebar.success("Viatura cadastrada!")
-    except Exception as e:
-        st.sidebar.error(f"Erro ao cadastrar viatura: {e}")
+    viaturas_table.create({
+        "Placa": placa.strip().upper(),
+        "Prefixo": prefixo.strip(),
+        "Status": status,
+        "Observacoes": obs.strip() if obs else "",
+        "TipoServico": tipo_servico
+    })
+    st.sidebar.success("Viatura cadastrada!")
 
 def atualizar_status_viatura(placa, novo_status):
-    try:
-        registros = viaturas_table.all()
-        for r in registros:
-            fields = r.get("fields", {})
-            if fields.get("Placa", "").upper() == (placa or "").strip().upper():
-                viaturas_table.update(r["id"], {"Status": novo_status})
-                return True
-        return False
-    except Exception as e:
-        st.error(f"Erro ao atualizar status: {e}")
-        return False
+    registros = viaturas_table.all()
+    for r in registros:
+        fields = r.get("fields", {})
+        if fields.get("Placa", "").upper() == (placa or "").strip().upper():
+            viaturas_table.update(r["id"], {"Status": novo_status})
+            return True
+    return False
 
 # ---------------- Troca de oleo ----------------
 def obter_ultima_troca():
-    try:
-        registros = trocaoleo_table.all(sort=["-data"])
-        if registros:
-            return int(registros[0]["fields"].get("km", 0))
-        return 0
-    except Exception as e:
-        st.error(f"Erro ao obter ultima troca de oleo: {e}")
-        return 0
+    registros = trocaoleo_table.all(sort=["-data"])
+    if registros:
+        return int(registros[0]["fields"].get("km", 0))
+    return 0
 
 def salvar_troca_oleo(km):
-    try:
-        trocaoleo_table.create({
-            "km": int(km),
-            "data": datetime.now().isoformat(),
-        })
-        st.success(f"Troca de oleo registrada em {int(km)} km.")
-    except Exception as e:
-        st.error(f"Erro ao salvar troca de oleo: {e}")
+    trocaoleo_table.create({
+        "km": int(km),
+        "data": datetime.now().isoformat(),
+    })
+    st.success(f"Troca de oleo registrada em {int(km)} km.")
 
 # ---------------- Checklist helpers ----------------
 def salvar_checklist(dados):
-    try:
-        checklists_table.create(dados, typecast=True)
-    except Exception as e:
-        st.error(f"Erro ao salvar checklist: {e}")
+    checklists_table.create(dados, typecast=True)
 
 def obter_ultimo_km(placa):
-    """Busca a ultima quilometragem registrada para a viatura pela placa."""
-    try:
-        registros = checklists_table.all(sort=["-Data"])
-        for r in registros:
-            fields = r.get("fields", {})
-            if fields.get("Placa") == placa:
+    registros = checklists_table.all(sort=["-Data"])
+    for r in registros:
+        fields = r.get("fields", {})
+        if fields.get("Placa") == placa:
+            try:
                 return int(fields.get("Quilometragem", 0))
-        return 0
-    except Exception as e:
-        st.error(f"Erro ao obter ultimo km: {e}")
-        return 0
+            except Exception:
+                pass
+    return 0
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
 st.title("🚑 Check List Ambulancia SAMU/SOCIAL")
 
-# Estado
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 if "tela" not in st.session_state:
@@ -176,7 +143,6 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     with c1:
         if st.button("Cadastrar"):
             if novo_user and nova_senha and nome and matricula:
-                # todos usuarios cadastrados como nao-admin
                 salvar_usuario(novo_user, nova_senha, nome, matricula, False)
                 st.success("Usuario cadastrado com sucesso! Clique em Voltar para Login.")
             else:
@@ -199,7 +165,6 @@ elif st.session_state.usuario:
         status = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
         tipo_servico = st.sidebar.selectbox("Tipo de Servico", TIPOS_SERVICO)
         obs = st.sidebar.text_area("Observacoes")
-
         if st.sidebar.button("Adicionar Viatura"):
             salvar_viatura(placa, prefixo, status, obs, tipo_servico)
 
@@ -217,7 +182,7 @@ elif st.session_state.usuario:
             else:
                 st.sidebar.error("Viatura nao encontrada pela placa.")
 
-    # Escolha de viatura (tipo primeiro, depois viatura)
+    # Escolha de viatura
     st.subheader("Escolha a Viatura")
     viaturas = carregar_viaturas()
     viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
@@ -229,7 +194,6 @@ elif st.session_state.usuario:
             if any(v.get("TipoServico") == t for v in viaturas_ativas)
         ]
         tipo_escolhido = st.selectbox("Selecione o tipo de servico", ["-- Selecione --"] + tipos_disponiveis)
-
         if tipo_escolhido and tipo_escolhido != "-- Selecione --":
             viaturas_filtradas = [v for v in viaturas_ativas if v.get("TipoServico") == tipo_escolhido]
             if viaturas_filtradas:
@@ -250,7 +214,6 @@ elif st.session_state.usuario:
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
-        # Mostrar ultimo km como dica
         ultimo_km = obter_ultimo_km(placa)
         if ultimo_km > 0:
             st.info(f"Ultima quilometragem registrada para {placa}: {ultimo_km} km.")
@@ -270,52 +233,62 @@ elif st.session_state.usuario:
         pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
 
         if st.button("Salvar Checklist"):
+            # validações básicas
             if km <= 0:
                 st.error("Informe uma quilometragem valida!")
+            elif ultimo_km and km < ultimo_km:
+                st.error(f"A quilometragem informada ({km}) é menor que a última registrada ({ultimo_km}).")
             else:
-                # valida quilometragem crescente
-                ultimo_km = obter_ultimo_km(placa)
-                if km < ultimo_km:
-                    st.error(f"A quilometragem informada ({km}) é menor que a última registrada ({ultimo_km}).")
-                else:
-                    dados = {
-                        "Data": datetime.now().isoformat(),
-                        "Condutor": st.session_state.usuario["nome"],
-                        "Matricula": st.session_state.usuario["matricula"],
-                        "Placa": placa,
-                        "Prefixo": prefixo,
-                        "Quilometragem": int(km),
-                        "Combustivel": comb,
-                        # Campos com espaço, iguais ao Airtable
-                        "Oxigenio Grande 1": int(ox1),
-                        "Oxigenio Grande 2": int(ox2),
-                        "Oxigenio Portatil": int(oxp),
-                        # Pneus com espaço
-                        "Pneu dianteiro direito": pneu_dd,
-                        "Pneu dianteiro esquerdo": pneu_de,
-                        "Pneu traseiro direito": pneu_td,
-                        "Pneu traseiro esquerdo": pneu_te,
-                        "TipoServico": tipo_escolhido
-                    }
-                    salvar_checklist(dados)
-                    st.success("Checklist registrado com sucesso!")
+                dados = {
+                    "Data": datetime.now().isoformat(),
+                    "Condutor": st.session_state.usuario["nome"],
+                    "Matricula": st.session_state.usuario["matricula"],
+                    "Placa": placa,
+                    "Prefixo": prefixo,
+                    "Quilometragem": int(km),
+                    "Combustivel": comb,
+                    # Campos com espaço iguais ao Airtable
+                    "Oxigenio Grande 1": int(ox1),
+                    "Oxigenio Grande 2": int(ox2),
+                    "Oxigenio Portatil": int(oxp),
+                    "Pneu dianteiro direito": pneu_dd,
+                    "Pneu dianteiro esquerdo": pneu_de,
+                    "Pneu traseiro direito": pneu_td,
+                    "Pneu traseiro esquerdo": pneu_te,
+                    "TipoServico": tipo_escolhido
+                }
+                salvar_checklist(dados)
+                st.success("Checklist registrado com sucesso!")
 
-                    # Aviso de troca de oleo
-                    ultima_troca = obter_ultima_troca()
-                    proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
-                        ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+                # Aviso de troca de oleo com faixa de tolerancia
+                ultima_troca = obter_ultima_troca()
+                if ultima_troca > 0:
+                    proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO
+                else:
+                    # Se nunca registrou troca, calcula o próximo múltiplo de 10.000 acima do km atual
+                    proxima_troca = ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+
+                if proxima_troca - TOLERANCIA_ALERTA <= int(km) <= proxima_troca + TOLERANCIA_ALERTA:
+                    st.warning(
+                        f"Atenção: {placa} está com {int(km)} km. "
+                        f"Faixa de troca de óleo (próxima troca em {proxima_troca} km)."
                     )
-                    if int(km) >= proxima_troca:
-                        st.error(f"Atenção: a viatura atingiu {int(km)} km. Necessaria troca de oleo.")
-                    else:
-                        faltam = proxima_troca - int(km)
-                        st.info(f"Faltam {faltam} km para a proxima troca de oleo.")
+                elif int(km) > proxima_troca + TOLERANCIA_ALERTA:
+                    st.error(
+                        f"Atenção: {placa} ultrapassou a quilometragem de troca "
+                        f"({int(km)} km). Necessária troca de óleo!"
+                    )
+                else:
+                    faltam = proxima_troca - int(km)
+                    st.info(f"Faltam {faltam} km para a próxima troca de óleo (em {proxima_troca} km).")
 
         # Registrar troca de oleo (somente admin)
         if st.session_state.usuario.get("admin", False):
             if st.button("Registrar troca de oleo"):
                 if km <= 0:
                     st.error("Informe uma quilometragem valida para registrar a troca!")
+                elif ultimo_km and km < ultimo_km:
+                    st.error(f"Não é possível registrar troca com km menor que o último ({ultimo_km}).")
                 else:
                     salvar_troca_oleo(km)
 
