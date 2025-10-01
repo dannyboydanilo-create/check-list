@@ -111,7 +111,7 @@ def obter_ultimo_checklist(placa):
             return f
     return None
 
-# ---------------- Alertas ----------------
+# ---------------- Alertas (motorista) ----------------
 def mostrar_alerta_troca(placa, km_atual):
     ultima_troca_admin = obter_ultima_troca(placa)
     if ultima_troca_admin > 0:
@@ -120,6 +120,7 @@ def mostrar_alerta_troca(placa, km_atual):
     else:
         proxima_troca = ((km_atual // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
         contexto = f"Primeira troca prevista: {proxima_troca} km."
+
     if km_atual < proxima_troca - TOLERANCIA_ALERTA:
         faltam = proxima_troca - km_atual
         st.info(f"ℹ️ Faltam {faltam} km para a troca de óleo. {contexto}")
@@ -218,7 +219,7 @@ elif st.session_state.usuario:
     else:
         st.info("Cadastre viaturas ativas para continuar.")
 
-    # Checklist (motorista vê óleo e oxigênio; pneus não geram alerta ao motorista)
+    # Checklist (sem pneus; motorista vê apenas óleo e oxigênio)
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
@@ -237,12 +238,6 @@ elif st.session_state.usuario:
         ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
         oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
 
-        st.markdown("#### Pneus")
-        pneu_dd = st.selectbox("Pneu dianteiro direito", ["Ruim", "Bom", "Otimo"])
-        pneu_de = st.selectbox("Pneu dianteiro esquerdo", ["Ruim", "Bom", "Otimo"])
-        pneu_td = st.selectbox("Pneu traseiro direito", ["Ruim", "Bom", "Otimo"])
-        pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
-
         if st.button("Salvar checklist"):
             if km <= 0:
                 st.error("Informe uma quilometragem válida!")
@@ -260,10 +255,6 @@ elif st.session_state.usuario:
                     "Oxigenio Grande 1": int(ox1),
                     "Oxigenio Grande 2": int(ox2),
                     "Oxigenio Portatil": int(oxp),
-                    "Pneu dianteiro direito": pneu_dd,
-                    "Pneu dianteiro esquerdo": pneu_de,
-                    "Pneu traseiro direito": pneu_td,
-                    "Pneu traseiro esquerdo": pneu_te,
                     "TipoServico": tipo_escolhido
                 }
                 salvar_checklist(dados)
@@ -324,22 +315,6 @@ elif st.session_state.usuario:
             else:
                 status_oleo = "🚨 Urgente"
 
-            # Alertas de pneus (apenas no dashboard)
-            ultimo_check = obter_ultimo_checklist(placa_v)
-            alerta_pneus = "—"
-            if ultimo_check:
-                avisos = []
-                for campo in [
-                    "Pneu dianteiro direito",
-                    "Pneu dianteiro esquerdo",
-                    "Pneu traseiro direito",
-                    "Pneu traseiro esquerdo"
-                ]:
-                    if ultimo_check.get(campo) == "Ruim":
-                        avisos.append(f"{campo} ruim")
-                if avisos:
-                    alerta_pneus = "⚠️ " + " | ".join(avisos)
-
             dados_dashboard.append({
                 "Prefixo": prefixo_v,
                 "Placa": placa_v,
@@ -347,8 +322,7 @@ elif st.session_state.usuario:
                 "Última troca": ultima_troca_v if ultima_troca_v > 0 else "—",
                 "Próxima troca": proxima_troca_v,
                 "Faltam (km)": faltam_v,
-                "Status óleo": status_oleo,
-                "Pneus (alertas)": alerta_pneus
+                "Status óleo": status_oleo
             })
 
         if dados_dashboard:
@@ -374,22 +348,25 @@ elif st.session_state.usuario:
             if viatura_sel:
                 placa_sel = viatura_sel.get("Placa")
 
-                # Histórico de checklists
+                # Histórico de checklists (sem pneus)
                 st.markdown("### ✅ Checklists")
+                registros_check_raw = checklists_table.all(sort=["-Data"])
                 registros_check = [
-                    r.get("fields", {}) for r in checklists_table.all(sort=["-Data"])
+                    r.get("fields", {}) for r in registros_check_raw
                     if r.get("fields", {}).get("Placa") == placa_sel
                 ]
                 if registros_check:
                     df_check = pd.DataFrame(registros_check)
+                    # Se quiser ocultar colunas específicas, ajuste aqui (ex.: df_check = df_check[["Data", ...]])
                     st.dataframe(df_check, use_container_width=True)
                 else:
                     st.info("Nenhum checklist registrado para esta viatura.")
 
                 # Histórico de trocas de óleo
                 st.markdown("### 🛢️ Trocas de Óleo")
+                registros_troca_raw = trocaoleo_table.all(sort=["-data"])
                 registros_troca = [
-                    r.get("fields", {}) for r in trocaoleo_table.all(sort=["-data"])
+                    r.get("fields", {}) for r in registros_troca_raw
                     if r.get("fields", {}).get("Placa") == placa_sel
                 ]
                 if registros_troca:
@@ -398,7 +375,7 @@ elif st.session_state.usuario:
                 else:
                     st.info("Nenhuma troca de óleo registrada para esta viatura.")
 
-    # Sair
+    # ---------------- Sair ----------------
     if st.button("Sair"):
         st.session_state.usuario = None
         st.session_state.tela = "login"
