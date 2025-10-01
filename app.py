@@ -20,7 +20,7 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]  # sem acentos
+TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social"]
 
 # ---------------- Usuarios ----------------
 def carregar_usuarios():
@@ -158,13 +158,13 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nova_senha = st.text_input("Nova senha", type="password")
     nome = st.text_input("Nome completo")
     matricula = st.text_input("Matricula")
-    is_admin = st.checkbox("Administrador?")
 
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Cadastrar"):
             if novo_user and nova_senha and nome and matricula:
-                salvar_usuario(novo_user, nova_senha, nome, matricula, is_admin)
+                # cadastra sempre como usuario comum
+                salvar_usuario(novo_user, nova_senha, nome, matricula, False)
                 st.success("Usuario cadastrado com sucesso! Clique em Voltar para Login.")
             else:
                 st.error("Preencha todos os campos!")
@@ -251,7 +251,6 @@ elif st.session_state.usuario:
         pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
 
         st.markdown("#### Checagem de avarias (imagem guia)")
-        # Coloque um arquivo 'ambulancia.png' na mesma pasta do app.py
         try:
             st.image("ambulancia.png", caption="Guia visual da ambulancia para checagem")
         except Exception:
@@ -286,10 +285,9 @@ elif st.session_state.usuario:
                     "Prefixo": prefixo,
                     "Quilometragem": int(km),
                     "Combustivel": comb,
-                    "Oxigenio Grande 1": int(ox1),
-                    "Oxigenio Grande 2": int(ox2),
-                    "Oxigenio Portatil": int(oxp),
-                    # Pneus (crie estes campos no Airtable)
+                    "OxigenioGrande1": int(ox1),
+                    "OxigenioGrande2": int(ox2),
+                    "OxigenioPortatil": int(oxp),
                     "pneu_dianteiro_direito": pneu_dd,
                     "pneu_dianteiro_esquerdo": pneu_de,
                     "pneu_traseiro_direito": pneu_td,
@@ -299,7 +297,6 @@ elif st.session_state.usuario:
                 salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
-                # Aviso de troca de oleo
                 ultima_troca = obter_ultima_troca()
                 proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
                     ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
@@ -323,4 +320,3 @@ elif st.session_state.usuario:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
-
