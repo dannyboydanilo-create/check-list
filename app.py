@@ -1,33 +1,53 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from pyairtable import Table
 
 # ---------------- Configuração Airtable ----------------
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
 BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 
-USUARIOS_TABLE_ID   = st.secrets["connections"]["airtable"]["usuarios_table_id"]
-CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id"]
-TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
-VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
+USUARIOS_TABLE_ID        = st.secrets["connections"]["airtable"]["usuarios_table_id"]
+CHECKLISTS_TABLE_ID      = st.secrets["connections"]["airtable"]["checklists_table_id"]
+TROCAOLEO_TABLE_ID       = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
+VIATURAS_TABLE_ID        = st.secrets["connections"]["airtable"]["viaturas_table_id"]
+ABASTECIMENTOS_TABLE_ID  = st.secrets["connections"]["airtable"]["abastecimentos_table_id"]
 
-usuarios_table   = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
-checklists_table = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
-trocaoleo_table  = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
-viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
+usuarios_table       = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
+checklists_table     = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
+trocaoleo_table      = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
+viaturas_table       = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
+abastecimentos_table = Table(API_KEY, BASE_ID, ABASTECIMENTOS_TABLE_ID)
 
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
 TOLERANCIA_ALERTA    = 500
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
 TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
+OXIGENIO_MIN_PSI     = 50
 
 # ---------------- Usuários ----------------
 def carregar_usuarios():
     return [r.get("fields", {}) for r in usuarios_table.all()]
 
 def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
+    existentes = carregar_usuarios()
+
+    # Verifica duplicidade de login
+    if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
+        st.error("Já existe um usuário com esse login. Escolha outro.")
+        return
+
+    # Verifica duplicidade de matrícula
+    if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
+        st.error("Já existe um usuário com essa matrícula.")
+        return
+
+    # Verifica se nome tem sobrenome
+    if len(nome.strip().split()) < 2:
+        st.error("O nome deve conter pelo menos um sobrenome.")
+        return
+
     usuarios_table.create({
         "usuario": usuario.strip(),
         "senha": senha.strip(),
@@ -35,6 +55,7 @@ def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
         "matricula": matricula.strip(),
         "is_admin": bool(is_admin),
     })
+    st.success("Usuário cadastrado com sucesso!")
 
 def autenticar(usuario, senha):
     for u in carregar_usuarios():
@@ -111,7 +132,14 @@ def obter_ultimo_checklist(placa):
             return f
     return None
 
-# ---------------- Alertas (motorista) ----------------
+# ---------------- Abastecimentos ----------------
+def salvar_abastecimento(dados):
+    abastecimentos_table.create(dados, typecast=True)
+
+def carregar_abastecimentos():
+    return [r.get("fields", {}) for r in abastecimentos_table.all(sort=["-Data"])]
+
+# ---------------- Alertas ----------------
 def mostrar_alerta_troca(placa, km_atual):
     ultima_troca_admin = obter_ultima_troca(placa)
     if ultima_troca_admin > 0:
@@ -120,7 +148,6 @@ def mostrar_alerta_troca(placa, km_atual):
     else:
         proxima_troca = ((km_atual // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
         contexto = f"Primeira troca prevista: {proxima_troca} km."
-
     if km_atual < proxima_troca - TOLERANCIA_ALERTA:
         faltam = proxima_troca - km_atual
         st.info(f"ℹ️ Faltam {faltam} km para a troca de óleo. {contexto}")
@@ -144,32 +171,39 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
-    if st.button("Entrar"):
+    entrar = st.button("Entrar")
+    cadastrar = st.button("Cadastro")
+
+    if entrar:
         u = autenticar(usuario, senha)
         if u:
             st.session_state.usuario = u
             st.rerun()
         else:
             st.error("Usuário ou senha incorretos!")
-    if st.button("Cadastro"):
+
+    if cadastrar:
         st.session_state.tela = "cadastro"
         st.rerun()
 
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     st.subheader("Cadastro de Usuário")
-    novo_user = st.text_input("Novo usuário")
+    novo_user = st.text_input("Novo usuário (login)")
     nova_senha = st.text_input("Nova senha", type="password")
-    nome = st.text_input("Nome completo")
+    nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
 
-    if st.button("Cadastrar"):
+    cadastrar_user = st.button("Cadastrar")
+    voltar_login = st.button("Voltar para Login")
+
+    if cadastrar_user:
         if novo_user and nova_senha and nome and matricula:
             salvar_usuario(novo_user, nova_senha, nome, matricula, False)
-            st.success("Usuário cadastrado! Clique em Voltar para Login.")
         else:
             st.error("Preencha todos os campos!")
-    if st.button("Voltar para Login"):
+
+    if voltar_login:
         st.session_state.tela = "login"
         st.rerun()
 
@@ -177,7 +211,7 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
 elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
-    # Admin: gestão de viaturas e histórico de trocas
+    # ---------------- Sidebar Admin ----------------
     if st.session_state.usuario and st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Gestão de Viaturas")
         placa_admin = st.sidebar.text_input("Placa")
@@ -185,7 +219,9 @@ elif st.session_state.usuario:
         status_admin = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
         tipo_servico_admin = st.sidebar.selectbox("Tipo de Serviço", TIPOS_SERVICO)
         obs_admin = st.sidebar.text_area("Observações")
-        if st.sidebar.button("Adicionar Viatura"):
+        add_viatura = st.sidebar.button("Adicionar Viatura")
+
+        if add_viatura:
             salvar_viatura(placa_admin, prefixo_admin, status_admin, obs_admin, tipo_servico_admin)
 
         st.sidebar.markdown("---")
@@ -196,7 +232,7 @@ elif st.session_state.usuario:
         else:
             st.sidebar.info("Nenhuma troca registrada ainda.")
 
-    # Escolha de viatura
+    # ---------------- Escolha de viatura ----------------
     st.subheader("Escolha a viatura")
     viaturas = carregar_viaturas()
     viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
@@ -219,7 +255,7 @@ elif st.session_state.usuario:
     else:
         st.info("Cadastre viaturas ativas para continuar.")
 
-    # Checklist (sem pneus; motorista vê apenas óleo e oxigênio)
+    # ---------------- Checklist (sem pneus) ----------------
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
@@ -234,11 +270,12 @@ elif st.session_state.usuario:
         comb = st.radio("Nível de combustível", OPCOES_COMBUSTIVEL, horizontal=True)
 
         st.markdown("#### Oxigênio")
-        ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
-        ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
-        oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
+        ox1 = st.number_input("Oxigênio Grande 1 (PSI)", min_value=0, step=1)
+        ox2 = st.number_input("Oxigênio Grande 2 (PSI)", min_value=0, step=1)
+        oxp = st.number_input("Oxigênio Portátil (PSI)", min_value=0, step=1)
 
-        if st.button("Salvar checklist"):
+        salvar_check = st.button("Salvar checklist")
+        if salvar_check:
             if km <= 0:
                 st.error("Informe uma quilometragem válida!")
             elif ultimo_km_check and km < ultimo_km_check:
@@ -262,18 +299,19 @@ elif st.session_state.usuario:
 
                 # Alertas do motorista: óleo e oxigênio
                 mostrar_alerta_troca(placa, int(km))
-                if ox1 < 50:
+                if ox1 < OXIGENIO_MIN_PSI:
                     st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI) – reabastecer imediatamente!")
-                if ox2 < 50:
+                if ox2 < OXIGENIO_MIN_PSI:
                     st.error(f"🚨 Oxigênio Grande 2 muito baixo ({ox2} PSI) – reabastecer imediatamente!")
-                if oxp < 50:
+                if oxp < OXIGENIO_MIN_PSI:
                     st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
 
         # Admin: registrar troca de óleo
         if st.session_state.usuario and st.session_state.usuario.get("admin", False):
             st.markdown("---")
             st.subheader("Troca de óleo")
-            if st.button("Registrar troca de óleo"):
+            registrar_troca = st.button("Registrar troca de óleo")
+            if registrar_troca:
                 if km <= 0:
                     st.error("Informe uma quilometragem válida para registrar a troca!")
                 elif ultimo_km_check and km < ultimo_km_check:
@@ -281,6 +319,32 @@ elif st.session_state.usuario:
                 else:
                     salvar_troca_oleo(placa, prefixo, km)
                     st.rerun()
+
+        # ---------------- Registro de Abastecimento (motorista) ----------------
+        st.markdown("---")
+        st.subheader("⛽ Registro de Abastecimento")
+
+        km_abast = st.number_input("Quilometragem no abastecimento", min_value=0, step=1)
+        litros = st.number_input("Litros abastecidos", min_value=0.0, step=0.1, format="%.1f")
+        valor = st.number_input("Valor total (R$)", min_value=0.0, step=0.01, format="%.2f")
+        salvar_abast = st.button("Salvar abastecimento")
+
+        if salvar_abast:
+            if km_abast <= 0 or litros <= 0 or valor <= 0:
+                st.error("Informe valores válidos para km, litros e valor.")
+            else:
+                dados_abast = {
+                    "Data": datetime.now().isoformat(),
+                    "Placa": placa,
+                    "Prefixo": prefixo,
+                    "Condutor": st.session_state.usuario["nome"],
+                    "Matricula": st.session_state.usuario["matricula"],
+                    "Km": int(km_abast),
+                    "Litros": float(litros),
+                    "Valor": float(valor)
+                }
+                salvar_abastecimento(dados_abast)
+                st.success("Abastecimento registrado com sucesso!")
 
     # ---------------- Dashboard de Manutenção (Admin) ----------------
     if st.session_state.usuario and st.session_state.usuario.get("admin", False):
@@ -303,7 +367,7 @@ elif st.session_state.usuario:
             if ultima_troca_v > 0:
                 proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
             else:
-                proxima_troca_v = ((ultimo_km_v // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+                proxima_troca_v = ((max(ultimo_km_v, 0) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
 
             faltam_v = proxima_troca_v - ultimo_km_v
 
@@ -357,7 +421,6 @@ elif st.session_state.usuario:
                 ]
                 if registros_check:
                     df_check = pd.DataFrame(registros_check)
-                    # Se quiser ocultar colunas específicas, ajuste aqui (ex.: df_check = df_check[["Data", ...]])
                     st.dataframe(df_check, use_container_width=True)
                 else:
                     st.info("Nenhum checklist registrado para esta viatura.")
@@ -375,8 +438,30 @@ elif st.session_state.usuario:
                 else:
                     st.info("Nenhuma troca de óleo registrada para esta viatura.")
 
+                # Histórico de abastecimentos
+                st.markdown("### ⛽ Abastecimentos")
+                registros_abast_raw = abastecimentos_table.all(sort=["-Data"])
+                registros_abast = [
+                    r.get("fields", {}) for r in registros_abast_raw
+                    if r.get("fields", {}).get("Placa") == placa_sel
+                ]
+                if registros_abast:
+                    df_abast = pd.DataFrame(registros_abast)
+                    # Cálculo simples de consumo se possível (entre entradas consecutivas)
+                    try:
+                        df_abast_sorted = df_abast.sort_values(by="Km")
+                        df_abast_sorted["Km anterior"] = df_abast_sorted["Km"].shift(1)
+                        df_abast_sorted["Km rodados"] = df_abast_sorted["Km"] - df_abast_sorted["Km anterior"]
+                        df_abast_sorted["Consumo (km/l)"] = df_abast_sorted["Km rodados"] / df_abast_sorted["Litros"]
+                        st.dataframe(df_abast_sorted, use_container_width=True)
+                    except Exception:
+                        st.dataframe(df_abast, use_container_width=True)
+                else:
+                    st.info("Nenhum abastecimento registrado para esta viatura.")
+
     # ---------------- Sair ----------------
-    if st.button("Sair"):
+    sair = st.button("Sair")
+    if sair:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
