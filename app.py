@@ -177,7 +177,7 @@ elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
     # Admin: gestão de viaturas e histórico de trocas
-    if st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Gestão de Viaturas")
         placa_admin = st.sidebar.text_input("Placa")
         prefixo_admin = st.sidebar.text_input("Prefixo")
@@ -218,7 +218,7 @@ elif st.session_state.usuario:
     else:
         st.info("Cadastre viaturas ativas para continuar.")
 
-    # Checklist (motorista vê óleo e oxigênio; pneus não geram alerta aqui)
+    # Checklist (motorista vê óleo e oxigênio; pneus não geram alerta ao motorista)
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
@@ -279,7 +279,7 @@ elif st.session_state.usuario:
                     st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
 
         # Admin: registrar troca de óleo
-        if st.session_state.usuario.get("admin", False):
+        if st.session_state.usuario and st.session_state.usuario.get("admin", False):
             st.markdown("---")
             st.subheader("Troca de óleo")
             if st.button("Registrar troca de óleo"):
@@ -290,40 +290,9 @@ elif st.session_state.usuario:
                 else:
                     salvar_troca_oleo(placa, prefixo, km)
                     st.rerun()
-                    # ---------------- Histórico de Viaturas (Admin) ----------------
-if st.session_state.usuario.get("admin", False):
-    st.markdown("---")
-    st.subheader("📜 Histórico de Viaturas")
-
-    viaturas_hist = carregar_viaturas()
-    opcoes_hist = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_hist]
-    escolha_hist = st.selectbox("Selecione a viatura", ["-- Selecione --"] + opcoes_hist)
-
-    if escolha_hist and escolha_hist != "-- Selecione --":
-        viatura_sel = next((v for v in viaturas_hist if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_hist), None)
-        if viatura_sel:
-            placa_sel = viatura_sel.get("Placa")
-
-            # Histórico de checklists
-            st.markdown("### ✅ Checklists")
-            registros_check = [r.get("fields", {}) for r in checklists_table.all(sort=["-Data"]) if r.get("fields", {}).get("Placa") == placa_sel]
-            if registros_check:
-                df_check = pd.DataFrame(registros_check)
-                st.dataframe(df_check, use_container_width=True)
-            else:
-                st.info("Nenhum checklist registrado para esta viatura.")
-
-            # Histórico de trocas de óleo
-            st.markdown("### 🛢️ Trocas de Óleo")
-            registros_troca = [r.get("fields", {}) for r in trocaoleo_table.all(sort=["-data"]) if r.get("fields", {}).get("Placa") == placa_sel]
-            if registros_troca:
-                df_troca = pd.DataFrame(registros_troca)
-                st.dataframe(df_troca, use_container_width=True)
-            else:
-                st.info("Nenhuma troca de óleo registrada para esta viatura.")
 
     # ---------------- Dashboard de Manutenção (Admin) ----------------
-    if st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
         st.markdown("---")
         st.subheader("📊 Dashboard de Manutenção")
 
@@ -355,7 +324,7 @@ if st.session_state.usuario.get("admin", False):
             else:
                 status_oleo = "🚨 Urgente"
 
-            # Alertas adicionais (pneus Ruim) – apenas no dashboard
+            # Alertas de pneus (apenas no dashboard)
             ultimo_check = obter_ultimo_checklist(placa_v)
             alerta_pneus = "—"
             if ultimo_check:
@@ -388,9 +357,49 @@ if st.session_state.usuario.get("admin", False):
         else:
             st.info("Nenhuma viatura cadastrada ainda.")
 
+    # ---------------- Histórico de Viaturas (Admin) ----------------
+    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
+        st.markdown("---")
+        st.subheader("📜 Histórico de Viaturas")
+
+        viaturas_hist = carregar_viaturas()
+        opcoes_hist = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_hist]
+        escolha_hist = st.selectbox("Selecione a viatura", ["-- Selecione --"] + opcoes_hist)
+
+        if escolha_hist and escolha_hist != "-- Selecione --":
+            viatura_sel = next(
+                (v for v in viaturas_hist if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_hist),
+                None
+            )
+            if viatura_sel:
+                placa_sel = viatura_sel.get("Placa")
+
+                # Histórico de checklists
+                st.markdown("### ✅ Checklists")
+                registros_check = [
+                    r.get("fields", {}) for r in checklists_table.all(sort=["-Data"])
+                    if r.get("fields", {}).get("Placa") == placa_sel
+                ]
+                if registros_check:
+                    df_check = pd.DataFrame(registros_check)
+                    st.dataframe(df_check, use_container_width=True)
+                else:
+                    st.info("Nenhum checklist registrado para esta viatura.")
+
+                # Histórico de trocas de óleo
+                st.markdown("### 🛢️ Trocas de Óleo")
+                registros_troca = [
+                    r.get("fields", {}) for r in trocaoleo_table.all(sort=["-data"])
+                    if r.get("fields", {}).get("Placa") == placa_sel
+                ]
+                if registros_troca:
+                    df_troca = pd.DataFrame(registros_troca)
+                    st.dataframe(df_troca, use_container_width=True)
+                else:
+                    st.info("Nenhuma troca de óleo registrada para esta viatura.")
+
     # Sair
     if st.button("Sair"):
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
-
