@@ -113,12 +113,25 @@ def salvar_troca_oleo(km):
     except Exception as e:
         st.error(f"Erro ao salvar troca de oleo: {e}")
 
-# ---------------- Checklist ----------------
+# ---------------- Checklist helpers ----------------
 def salvar_checklist(dados):
     try:
         checklists_table.create(dados, typecast=True)
     except Exception as e:
         st.error(f"Erro ao salvar checklist: {e}")
+
+def obter_ultimo_km(placa):
+    """Busca a ultima quilometragem registrada para a viatura pela placa."""
+    try:
+        registros = checklists_table.all(sort=["-Data"])
+        for r in registros:
+            fields = r.get("fields", {})
+            if fields.get("Placa") == placa:
+                return int(fields.get("Quilometragem", 0))
+        return 0
+    except Exception as e:
+        st.error(f"Erro ao obter ultimo km: {e}")
+        return 0
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
@@ -163,7 +176,7 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     with c1:
         if st.button("Cadastrar"):
             if novo_user and nova_senha and nome and matricula:
-                # cadastra sempre como usuario comum
+                # todos usuarios cadastrados como nao-admin
                 salvar_usuario(novo_user, nova_senha, nome, matricula, False)
                 st.success("Usuario cadastrado com sucesso! Clique em Voltar para Login.")
             else:
@@ -236,6 +249,12 @@ elif st.session_state.usuario:
     # Checklist
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
+
+        # Mostrar ultimo km como dica
+        ultimo_km = obter_ultimo_km(placa)
+        if ultimo_km > 0:
+            st.info(f"Ultima quilometragem registrada para {placa}: {ultimo_km} km.")
+
         km = st.number_input("Quilometragem atual", min_value=0, step=1)
         comb = st.radio("Nivel de combustivel", OPCOES_COMBUSTIVEL, horizontal=True)
 
@@ -254,36 +273,43 @@ elif st.session_state.usuario:
             if km <= 0:
                 st.error("Informe uma quilometragem valida!")
             else:
-                dados = {
-                    "Data": datetime.now().isoformat(),
-                    "Condutor": st.session_state.usuario["nome"],
-                    "Matricula": st.session_state.usuario["matricula"],
-                    "Placa": placa,
-                    "Prefixo": prefixo,
-                    "Quilometragem": int(km),
-                    "Combustivel": comb,
-                    "Oxigenio Grande 1": int(ox1),
-                    "Oxigenio Grande 2": int(ox2),
-                    "Oxigenio Portatil": int(oxp),
-                    "pneu_dianteiro_direito": pneu_dd,
-                    "pneu_dianteiro_esquerdo": pneu_de,
-                    "pneu_traseiro_direito": pneu_td,
-                    "pneu_traseiro_esquerdo": pneu_te,
-                    "TipoServico": tipo_escolhido
-                }
-                salvar_checklist(dados)
-                st.success("Checklist registrado com sucesso!")
-
-                # Aviso de troca de oleo
-                ultima_troca = obter_ultima_troca()
-                proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
-                    ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
-                )
-                if int(km) >= proxima_troca:
-                    st.error(f"Atenção: a viatura atingiu {int(km)} km. Necessaria troca de oleo.")
+                # valida quilometragem crescente
+                ultimo_km = obter_ultimo_km(placa)
+                if km < ultimo_km:
+                    st.error(f"A quilometragem informada ({km}) é menor que a última registrada ({ultimo_km}).")
                 else:
-                    faltam = proxima_troca - int(km)
-                    st.info(f"Faltam {faltam} km para a proxima troca de oleo.")
+                    dados = {
+                        "Data": datetime.now().isoformat(),
+                        "Condutor": st.session_state.usuario["nome"],
+                        "Matricula": st.session_state.usuario["matricula"],
+                        "Placa": placa,
+                        "Prefixo": prefixo,
+                        "Quilometragem": int(km),
+                        "Combustivel": comb,
+                        # Campos com espaço, iguais ao Airtable
+                        "Oxigenio Grande 1": int(ox1),
+                        "Oxigenio Grande 2": int(ox2),
+                        "Oxigenio Portatil": int(oxp),
+                        # Pneus com espaço
+                        "Pneu dianteiro direito": pneu_dd,
+                        "Pneu dianteiro esquerdo": pneu_de,
+                        "Pneu traseiro direito": pneu_td,
+                        "Pneu traseiro esquerdo": pneu_te,
+                        "TipoServico": tipo_escolhido
+                    }
+                    salvar_checklist(dados)
+                    st.success("Checklist registrado com sucesso!")
+
+                    # Aviso de troca de oleo
+                    ultima_troca = obter_ultima_troca()
+                    proxima_troca = (ultima_troca + INTERVALO_TROCA_OLEO) if ultima_troca > 0 else (
+                        ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+                    )
+                    if int(km) >= proxima_troca:
+                        st.error(f"Atenção: a viatura atingiu {int(km)} km. Necessaria troca de oleo.")
+                    else:
+                        faltam = proxima_troca - int(km)
+                        st.info(f"Faltam {faltam} km para a proxima troca de oleo.")
 
         # Registrar troca de oleo (somente admin)
         if st.session_state.usuario.get("admin", False):
@@ -298,4 +324,3 @@ elif st.session_state.usuario:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
-
