@@ -88,7 +88,7 @@ def carregar_trocas():
     registros = trocaoleo_table.all(sort=["-data"])
     return [r.get("fields", {}) for r in registros]
 
-# ---------------- Checklist helpers ----------------
+# ---------------- Checklists ----------------
 def salvar_checklist(dados):
     checklists_table.create(dados, typecast=True)
 
@@ -103,6 +103,7 @@ def obter_ultimo_km(placa):
                 return 0
     return 0
 
+# ---------------- Alertas ----------------
 def mostrar_alerta_troca(placa, km_atual):
     ultima_troca_admin = obter_ultima_troca(placa)
     if ultima_troca_admin > 0:
@@ -119,6 +120,25 @@ def mostrar_alerta_troca(placa, km_atual):
         st.warning(f"⚠️ {placa} está na FAIXA DE TROCA! Atual: {km_atual} km | {contexto}")
     else:
         st.error(f"🚨 URGENTE: {placa} já passou da troca! Prevista: {proxima_troca} km | Atual: {km_atual} km.")
+
+def alertas_preventivos(ox1, ox2, oxp, pneu_dd, pneu_de, pneu_td, pneu_te):
+    # Oxigênio abaixo de 50 PSI
+    if ox1 < 50:
+        st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI) – reabastecer imediatamente!")
+    if ox2 < 50:
+        st.error(f"🚨 Oxigênio Grande 2 muito baixo ({ox2} PSI) – reabastecer imediatamente!")
+    if oxp < 50:
+        st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
+    # Pneus marcados como Ruim
+    pneus = {
+        "Dianteiro direito": pneu_dd,
+        "Dianteiro esquerdo": pneu_de,
+        "Traseiro direito": pneu_td,
+        "Traseiro esquerdo": pneu_te
+    }
+    for posicao, estado in pneus.items():
+        if estado == "Ruim":
+            st.warning(f"⚠️ Pneu {posicao} marcado como RUIM – providenciar manutenção.")
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
@@ -262,9 +282,13 @@ elif st.session_state.usuario:
                 }
                 salvar_checklist(dados)
                 st.success("Checklist registrado!")
-                mostrar_alerta_troca(placa, int(km))
 
-        # Admin: registrar troca
+                # Alertas de óleo
+                mostrar_alerta_troca(placa, int(km))
+                # Alertas preventivos (oxigênio < 50 PSI e pneus 'Ruim')
+                alertas_preventivos(ox1, ox2, oxp, pneu_dd, pneu_de, pneu_td, pneu_te)
+
+        # Admin: registrar troca de óleo
         if st.session_state.usuario.get("admin", False):
             st.markdown("---")
             st.subheader("Troca de óleo")
