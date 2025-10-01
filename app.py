@@ -135,19 +135,17 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Entrar"):
-            u = autenticar(usuario, senha)
-            if u:
-                st.session_state.usuario = u
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos!")
-    with c2:
-        if st.button("Cadastro"):
-            st.session_state.tela = "cadastro"
+    if st.button("Entrar"):
+        u = autenticar(usuario, senha)
+        if u:
+            st.session_state.usuario = u
             st.rerun()
+        else:
+            st.error("Usuário ou senha incorretos!")
+
+    if st.button("Cadastro"):
+        st.session_state.tela = "cadastro"
+        st.rerun()
 
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
@@ -157,18 +155,16 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nome = st.text_input("Nome completo")
     matricula = st.text_input("Matrícula")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Cadastrar"):
-            if novo_user and nova_senha and nome and matricula:
-                salvar_usuario(novo_user, nova_senha, nome, matricula, False)
-                st.success("Usuário cadastrado! Clique em Voltar para Login.")
-            else:
-                st.error("Preencha todos os campos!")
-    with c2:
-        if st.button("Voltar para Login"):
-            st.session_state.tela = "login"
-            st.rerun()
+    if st.button("Cadastrar"):
+        if novo_user and nova_senha and nome and matricula:
+            salvar_usuario(novo_user, nova_senha, nome, matricula, False)
+            st.success("Usuário cadastrado! Clique em Voltar para Login.")
+        else:
+            st.error("Preencha todos os campos!")
+
+    if st.button("Voltar para Login"):
+        st.session_state.tela = "login"
+        st.rerun()
 
 # ---------------- Tela Principal ----------------
 elif st.session_state.usuario:
@@ -216,7 +212,7 @@ elif st.session_state.usuario:
     else:
         st.info("Cadastre viaturas ativas para continuar.")
 
-    # Checklist com layout mobile-friendly
+    # Checklist
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
@@ -227,42 +223,21 @@ elif st.session_state.usuario:
         if ultima_troca_admin > 0:
             st.info(f"Última troca de óleo: {ultima_troca_admin} km.")
 
-        # Combustível e Km lado a lado
-        col1, col2 = st.columns(2)
-        with col1:
-            km = st.number_input("Quilometragem atual", min_value=0, step=1)
-        with col2:
-            comb = st.radio("Combustível", OPCOES_COMBUSTIVEL, horizontal=True)
+        km = st.number_input("Quilometragem atual", min_value=0, step=1)
+        comb = st.radio("Nível de combustível", OPCOES_COMBUSTIVEL, horizontal=True)
 
-        # Oxigênio em 3 colunas
         st.markdown("#### Oxigênio")
-        cox1, cox2, cox3 = st.columns(3)
-        with cox1:
-            ox1 = st.number_input("Grande 1 (PSI)", min_value=0, step=1)
-        with cox2:
-            ox2 = st.number_input("Grande 2 (PSI)", min_value=0, step=1)
-        with cox3:
-            oxp = st.number_input("Portátil (PSI)", min_value=0, step=1)
+        ox1 = st.number_input("Oxigenio Grande 1 (PSI)", min_value=0, step=1)
+        ox2 = st.number_input("Oxigenio Grande 2 (PSI)", min_value=0, step=1)
+        oxp = st.number_input("Oxigenio Portatil (PSI)", min_value=0, step=1)
 
-        # Pneus em 2 colunas
         st.markdown("#### Pneus")
-        cp1, cp2 = st.columns(2)
-        with cp1:
-            pneu_dd = st.selectbox("Dianteiro direito", ["Ruim", "Bom", "Ótimo"])
-            pneu_td = st.selectbox("Traseiro direito", ["Ruim", "Bom", "Ótimo"])
-        with cp2:
-            pneu_de = st.selectbox("Dianteiro esquerdo", ["Ruim", "Bom", "Ótimo"])
-            pneu_te = st.selectbox("Traseiro esquerdo", ["Ruim", "Bom", "Ótimo"])
+        pneu_dd = st.selectbox("Pneu dianteiro direito", ["Ruim", "Bom", "Otimo"])
+        pneu_de = st.selectbox("Pneu dianteiro esquerdo", ["Ruim", "Bom", "Otimo"])
+        pneu_td = st.selectbox("Pneu traseiro direito", ["Ruim", "Bom", "Otimo"])
+        pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
 
-        # Botões de ação
-        bcol1, bcol2 = st.columns(2)
-        with bcol1:
-            salvar = st.button("Salvar")
-        with bcol2:
-            sair = st.button("Sair")
-
-        # Salvar checklist
-        if salvar:
+        if st.button("Salvar checklist"):
             if km <= 0:
                 st.error("Informe uma quilometragem válida!")
             elif ultimo_km_check and km < ultimo_km_check:
@@ -289,7 +264,7 @@ elif st.session_state.usuario:
                 st.success("Checklist registrado!")
                 mostrar_alerta_troca(placa, int(km))
 
-        # Admin: registrar troca (após salvar km válido)
+        # Admin: registrar troca
         if st.session_state.usuario.get("admin", False):
             st.markdown("---")
             st.subheader("Troca de óleo")
@@ -302,14 +277,55 @@ elif st.session_state.usuario:
                     salvar_troca_oleo(placa, prefixo, km)
                     st.rerun()
 
-        # Sair
-        if sair:
-            st.session_state.usuario = None
-            st.session_state.tela = "login"
-            st.rerun()
-    else:
-        # Botão de sair sempre disponível
-        if st.button("Sair"):
-            st.session_state.usuario = None
-            st.session_state.tela = "login"
-            st.rerun()
+    # ---------------- Dashboard de Manutenção (Admin) ----------------
+    if st.session_state.usuario.get("admin", False):
+        st.markdown("---")
+        st.subheader("📊 Dashboard de Manutenção")
+
+        viaturas_dash = carregar_viaturas()
+        dados_dashboard = []
+
+        for v in viaturas_dash:
+            placa_v = v.get("Placa")
+            prefixo_v = v.get("Prefixo")
+            if not placa_v:
+                continue
+
+            ultimo_km_v = obter_ultimo_km(placa_v)
+            ultima_troca_v = obter_ultima_troca(placa_v)
+
+            if ultima_troca_v > 0:
+                proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
+            else:
+                proxima_troca_v = ((ultimo_km_v // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+
+            faltam_v = proxima_troca_v - ultimo_km_v
+
+            if ultimo_km_v < proxima_troca_v - TOLERANCIA_ALERTA:
+                status_v = "✅ OK"
+            elif proxima_troca_v - TOLERANCIA_ALERTA <= ultimo_km_v <= proxima_troca_v + TOLERANCIA_ALERTA:
+                status_v = "⚠️ Atenção"
+            else:
+                status_v = "🚨 Urgente"
+
+            dados_dashboard.append({
+                "Prefixo": prefixo_v,
+                "Placa": placa_v,
+                "Último KM": ultimo_km_v,
+                "Última troca": ultima_troca_v if ultima_troca_v > 0 else "—",
+                "Próxima troca": proxima_troca_v,
+                "Faltam (km)": faltam_v,
+                "Status": status_v
+            })
+
+        if dados_dashboard:
+            df_dash = pd.DataFrame(dados_dashboard)
+            st.dataframe(df_dash, use_container_width=True)
+        else:
+            st.info("Nenhuma viatura cadastrada ainda.")
+
+    # Sair
+    if st.button("Sair"):
+        st.session_state.usuario = None
+        st.session_state.tela = "login"
+        st.rerun()
