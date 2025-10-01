@@ -262,9 +262,9 @@ elif st.session_state.usuario:
                     "Prefixo": prefixo,
                     "Quilometragem": int(km),
                     "Combustivel": comb,
-                    "OxigenioGrande1": int(ox1),
-                    "OxigenioGrande2": int(ox2),
-                    "OxigenioPortatil": int(oxp),
+                    "Oxigenio Grande 1": int(ox1),
+                    "Oxigenio Grande 2": int(ox2),
+                    "Oxigenio Portatil": int(oxp),
                     "pneu_dianteiro_direito": pneu_dd,
                     "pneu_dianteiro_esquerdo": pneu_de,
                     "pneu_traseiro_direito": pneu_td,
@@ -298,3 +298,4 @@ elif st.session_state.usuario:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
+
