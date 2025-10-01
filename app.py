@@ -51,9 +51,6 @@ def carregar_viaturas():
     return [r.get("fields", {}) for r in viaturas_table.all()]
 
 def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
-    if not placa or not prefixo:
-        st.sidebar.error("Placa e Prefixo sao obrigatorios.")
-        return
     viaturas_table.create({
         "Placa": placa.strip().upper(),
         "Prefixo": prefixo.strip(),
@@ -61,7 +58,6 @@ def salvar_viatura(placa, prefixo, status="Ativa", obs="", tipo_servico="SAMU"):
         "Observacoes": obs.strip() if obs else "",
         "TipoServico": tipo_servico
     })
-    st.sidebar.success("Viatura cadastrada!")
 
 def atualizar_status_viatura(placa, novo_status):
     registros = viaturas_table.all()
@@ -73,32 +69,47 @@ def atualizar_status_viatura(placa, novo_status):
     return False
 
 # ---------------- Troca de oleo ----------------
-def obter_ultima_troca():
+def obter_ultima_troca(placa):
+    """Retorna o km da ultima troca registrada pelo admin para a placa."""
     registros = trocaoleo_table.all(sort=["-data"])
-    if registros:
-        return int(registros[0]["fields"].get("km", 0))
+    for r in registros:
+        f = r.get("fields", {})
+        if f.get("Placa") == placa:
+            try:
+                return int(f.get("km", 0))
+            except Exception:
+                return 0
     return 0
 
-def salvar_troca_oleo(km):
+def salvar_troca_oleo(placa, prefixo, km):
+    """Registra troca de oleo vinculada a placa/prefixo e km atual."""
     trocaoleo_table.create({
+        "Placa": placa,
+        "Prefixo": prefixo,
         "km": int(km),
         "data": datetime.now().isoformat(),
     })
-    st.success(f"Troca de oleo registrada em {int(km)} km.")
+    st.success(f"Troca de óleo registrada para {placa} em {int(km)} km.")
+
+def carregar_trocas():
+    """Carrega todas as trocas para exibir em histórico (somente admin)."""
+    registros = trocaoleo_table.all(sort=["-data"])
+    return [r.get("fields", {}) for r in registros]
 
 # ---------------- Checklist helpers ----------------
 def salvar_checklist(dados):
     checklists_table.create(dados, typecast=True)
 
 def obter_ultimo_km(placa):
+    """Ultimo km de checklist para a placa (para garantir km crescente)."""
     registros = checklists_table.all(sort=["-Data"])
     for r in registros:
-        fields = r.get("fields", {})
-        if fields.get("Placa") == placa:
+        f = r.get("fields", {})
+        if f.get("Placa") == placa:
             try:
-                return int(fields.get("Quilometragem", 0))
+                return int(f.get("Quilometragem", 0))
             except Exception:
-                pass
+                return 0
     return 0
 
 # ---------------- UI ----------------
@@ -113,7 +124,6 @@ if "tela" not in st.session_state:
 # ---------------- Tela de Login ----------------
 if st.session_state.tela == "login" and not st.session_state.usuario:
     st.subheader("Login")
-
     usuario = st.text_input("Usuario")
     senha = st.text_input("Senha", type="password")
 
@@ -160,27 +170,22 @@ elif st.session_state.usuario:
     if st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Administracao")
         st.sidebar.subheader("Gestao de Viaturas")
-        placa = st.sidebar.text_input("Placa")
-        prefixo = st.sidebar.text_input("Prefixo")
-        status = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
-        tipo_servico = st.sidebar.selectbox("Tipo de Servico", TIPOS_SERVICO)
-        obs = st.sidebar.text_area("Observacoes")
+        placa_admin = st.sidebar.text_input("Placa")
+        prefixo_admin = st.sidebar.text_input("Prefixo")
+        status_admin = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
+        tipo_servico_admin = st.sidebar.selectbox("Tipo de Servico", TIPOS_SERVICO)
+        obs_admin = st.sidebar.text_area("Observacoes")
+
         if st.sidebar.button("Adicionar Viatura"):
-            salvar_viatura(placa, prefixo, status, obs, tipo_servico)
+            salvar_viatura(placa_admin, prefixo_admin, status_admin, obs_admin, tipo_servico_admin)
 
         st.sidebar.markdown("---")
-        viaturas_admin = carregar_viaturas()
-        if viaturas_admin:
-            st.sidebar.markdown("### Viaturas cadastradas")
-            st.sidebar.dataframe(pd.DataFrame(viaturas_admin), use_container_width=True)
-        placa_status = st.sidebar.text_input("Placa para alterar status")
-        novo_status = st.sidebar.selectbox("Novo status", ["Ativa", "Inativa"])
-        if st.sidebar.button("Atualizar status"):
-            ok = atualizar_status_viatura(placa_status, novo_status)
-            if ok:
-                st.sidebar.success("Status atualizado!")
-            else:
-                st.sidebar.error("Viatura nao encontrada pela placa.")
+        st.sidebar.subheader("Historico de Trocas de Oleo")
+        trocas = carregar_trocas()
+        if trocas:
+            st.sidebar.dataframe(pd.DataFrame(trocas), use_container_width=True)
+        else:
+            st.sidebar.info("Nenhuma troca registrada ainda.")
 
     # Escolha de viatura
     st.subheader("Escolha a Viatura")
@@ -194,6 +199,7 @@ elif st.session_state.usuario:
             if any(v.get("TipoServico") == t for v in viaturas_ativas)
         ]
         tipo_escolhido = st.selectbox("Selecione o tipo de servico", ["-- Selecione --"] + tipos_disponiveis)
+
         if tipo_escolhido and tipo_escolhido != "-- Selecione --":
             viaturas_filtradas = [v for v in viaturas_ativas if v.get("TipoServico") == tipo_escolhido]
             if viaturas_filtradas:
@@ -214,10 +220,16 @@ elif st.session_state.usuario:
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
-        ultimo_km = obter_ultimo_km(placa)
-        if ultimo_km > 0:
-            st.info(f"Ultima quilometragem registrada para {placa}: {ultimo_km} km.")
+        # Dicas de contexto
+        ultimo_km_check = obter_ultimo_km(placa)
+        if ultimo_km_check > 0:
+            st.info(f"Ultimo km de checklist para {placa}: {ultimo_km_check} km.")
 
+        ultima_troca_admin = obter_ultima_troca(placa)
+        if ultima_troca_admin > 0:
+            st.info(f"Ultima troca de oleo registrada para {placa}: {ultima_troca_admin} km.")
+
+        # Entradas
         km = st.number_input("Quilometragem atual", min_value=0, step=1)
         comb = st.radio("Nivel de combustivel", OPCOES_COMBUSTIVEL, horizontal=True)
 
@@ -232,12 +244,13 @@ elif st.session_state.usuario:
         pneu_td = st.selectbox("Pneu traseiro direito", ["Ruim", "Bom", "Otimo"])
         pneu_te = st.selectbox("Pneu traseiro esquerdo", ["Ruim", "Bom", "Otimo"])
 
+        # Botao salvar checklist
         if st.button("Salvar Checklist"):
-            # validações básicas
+            # Validacoes de km crescente
             if km <= 0:
                 st.error("Informe uma quilometragem valida!")
-            elif ultimo_km and km < ultimo_km:
-                st.error(f"A quilometragem informada ({km}) é menor que a última registrada ({ultimo_km}).")
+            elif ultimo_km_check and km < ultimo_km_check:
+                st.error(f"A quilometragem informada ({km}) é menor que a última registrada ({ultimo_km_check}).")
             else:
                 dados = {
                     "Data": datetime.now().isoformat(),
@@ -247,7 +260,6 @@ elif st.session_state.usuario:
                     "Prefixo": prefixo,
                     "Quilometragem": int(km),
                     "Combustivel": comb,
-                    # Campos com espaço iguais ao Airtable
                     "Oxigenio Grande 1": int(ox1),
                     "Oxigenio Grande 2": int(ox2),
                     "Oxigenio Portatil": int(oxp),
@@ -260,41 +272,45 @@ elif st.session_state.usuario:
                 salvar_checklist(dados)
                 st.success("Checklist registrado com sucesso!")
 
-                # Aviso de troca de oleo com faixa de tolerancia
-                ultima_troca = obter_ultima_troca()
-                if ultima_troca > 0:
-                    proxima_troca = ultima_troca + INTERVALO_TROCA_OLEO
+                # Alerta de troca baseado SOMENTE na ultima troca registrada pelo admin
+                # (o alerta só some quando o admin registrar nova troca)
+                if ultima_troca_admin > 0:
+                    proxima_troca = ultima_troca_admin + INTERVALO_TROCA_OLEO
+                    if int(km) >= proxima_troca - TOLERANCIA_ALERTA:
+                        if int(km) <= proxima_troca + TOLERANCIA_ALERTA:
+                            st.warning(
+                                f"Atenção: {placa} está com {int(km)} km. "
+                                f"Faixa de troca de óleo (próxima em {proxima_troca} km; última troca em {ultima_troca_admin} km)."
+                            )
+                        else:
+                            st.error(
+                                f"Atenção: {placa} ultrapassou a quilometragem de troca "
+                                f"({int(km)} km). Necessária troca de óleo! (última troca em {ultima_troca_admin} km)"
+                            )
+                    else:
+                        faltam = proxima_troca - int(km)
+                        st.info(f"Faltam {faltam} km para a próxima troca de óleo (em {proxima_troca} km).")
                 else:
-                    # Se nunca registrou troca, calcula o próximo múltiplo de 10.000 acima do km atual
-                    proxima_troca = ((int(km) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
-
-                if proxima_troca - TOLERANCIA_ALERTA <= int(km) <= proxima_troca + TOLERANCIA_ALERTA:
-                    st.warning(
-                        f"Atenção: {placa} está com {int(km)} km. "
-                        f"Faixa de troca de óleo (próxima troca em {proxima_troca} km)."
-                    )
-                elif int(km) > proxima_troca + TOLERANCIA_ALERTA:
-                    st.error(
-                        f"Atenção: {placa} ultrapassou a quilometragem de troca "
-                        f"({int(km)} km). Necessária troca de óleo!"
-                    )
-                else:
-                    faltam = proxima_troca - int(km)
-                    st.info(f"Faltam {faltam} km para a próxima troca de óleo (em {proxima_troca} km).")
+                    # Nunca houve troca registrada: exibe informação para admin iniciar o ciclo
+                    st.info("Ainda não há troca de óleo registrada pelo administrador para esta viatura.")
 
         # Registrar troca de oleo (somente admin)
         if st.session_state.usuario.get("admin", False):
+            st.markdown("---")
+            st.subheader("Troca de óleo")
             if st.button("Registrar troca de oleo"):
+                # Validar km (sempre crescente)
                 if km <= 0:
                     st.error("Informe uma quilometragem valida para registrar a troca!")
-                elif ultimo_km and km < ultimo_km:
-                    st.error(f"Não é possível registrar troca com km menor que o último ({ultimo_km}).")
+                elif ultimo_km_check and km < ultimo_km_check:
+                    st.error(f"Não é possível registrar troca com km menor que o último checklist ({ultimo_km_check}).")
                 else:
-                    salvar_troca_oleo(km)
+                    salvar_troca_oleo(placa, prefixo, km)
+                    # Após registrar, reexecuta para atualizar alertas
+                    st.rerun()
 
     # Sair
     if st.button("Sair"):
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
-
