@@ -103,6 +103,14 @@ def obter_ultimo_km(placa):
                 return 0
     return 0
 
+def obter_ultimo_checklist(placa):
+    registros = checklists_table.all(sort=["-Data"])
+    for r in registros:
+        f = r.get("fields", {})
+        if f.get("Placa") == placa:
+            return f
+    return None
+
 # ---------------- Alertas ----------------
 def mostrar_alerta_troca(placa, km_atual):
     ultima_troca_admin = obter_ultima_troca(placa)
@@ -112,7 +120,6 @@ def mostrar_alerta_troca(placa, km_atual):
     else:
         proxima_troca = ((km_atual // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
         contexto = f"Primeira troca prevista: {proxima_troca} km."
-
     if km_atual < proxima_troca - TOLERANCIA_ALERTA:
         faltam = proxima_troca - km_atual
         st.info(f"ℹ️ Faltam {faltam} km para a troca de óleo. {contexto}")
@@ -120,25 +127,6 @@ def mostrar_alerta_troca(placa, km_atual):
         st.warning(f"⚠️ {placa} está na FAIXA DE TROCA! Atual: {km_atual} km | {contexto}")
     else:
         st.error(f"🚨 URGENTE: {placa} já passou da troca! Prevista: {proxima_troca} km | Atual: {km_atual} km.")
-
-def alertas_preventivos(ox1, ox2, oxp, pneu_dd, pneu_de, pneu_td, pneu_te):
-    # Oxigênio abaixo de 50 PSI
-    if ox1 < 50:
-        st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI) – reabastecer imediatamente!")
-    if ox2 < 50:
-        st.error(f"🚨 Oxigênio Grande 2 muito baixo ({ox2} PSI) – reabastecer imediatamente!")
-    if oxp < 50:
-        st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
-    # Pneus marcados como Ruim
-    pneus = {
-        "Dianteiro direito": pneu_dd,
-        "Dianteiro esquerdo": pneu_de,
-        "Traseiro direito": pneu_td,
-        "Traseiro esquerdo": pneu_te
-    }
-    for posicao, estado in pneus.items():
-        if estado == "Ruim":
-            st.warning(f"⚠️ Pneu {posicao} marcado como RUIM – providenciar manutenção.")
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
@@ -162,7 +150,6 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
             st.rerun()
         else:
             st.error("Usuário ou senha incorretos!")
-
     if st.button("Cadastro"):
         st.session_state.tela = "cadastro"
         st.rerun()
@@ -181,7 +168,6 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
             st.success("Usuário cadastrado! Clique em Voltar para Login.")
         else:
             st.error("Preencha todos os campos!")
-
     if st.button("Voltar para Login"):
         st.session_state.tela = "login"
         st.rerun()
@@ -232,7 +218,7 @@ elif st.session_state.usuario:
     else:
         st.info("Cadastre viaturas ativas para continuar.")
 
-    # Checklist
+    # Checklist (motorista vê óleo e oxigênio; pneus não geram alerta aqui)
     if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
         st.subheader("Checklist da Viatura")
 
@@ -283,10 +269,14 @@ elif st.session_state.usuario:
                 salvar_checklist(dados)
                 st.success("Checklist registrado!")
 
-                # Alertas de óleo
+                # Alertas do motorista: óleo e oxigênio
                 mostrar_alerta_troca(placa, int(km))
-                # Alertas preventivos (oxigênio < 50 PSI e pneus 'Ruim')
-                alertas_preventivos(ox1, ox2, oxp, pneu_dd, pneu_de, pneu_td, pneu_te)
+                if ox1 < 50:
+                    st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI) – reabastecer imediatamente!")
+                if ox2 < 50:
+                    st.error(f"🚨 Oxigênio Grande 2 muito baixo ({ox2} PSI) – reabastecer imediatamente!")
+                if oxp < 50:
+                    st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
 
         # Admin: registrar troca de óleo
         if st.session_state.usuario.get("admin", False):
@@ -318,6 +308,7 @@ elif st.session_state.usuario:
             ultimo_km_v = obter_ultimo_km(placa_v)
             ultima_troca_v = obter_ultima_troca(placa_v)
 
+            # Próxima troca de óleo
             if ultima_troca_v > 0:
                 proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
             else:
@@ -325,12 +316,29 @@ elif st.session_state.usuario:
 
             faltam_v = proxima_troca_v - ultimo_km_v
 
+            # Status óleo
             if ultimo_km_v < proxima_troca_v - TOLERANCIA_ALERTA:
-                status_v = "✅ OK"
+                status_oleo = "✅ OK"
             elif proxima_troca_v - TOLERANCIA_ALERTA <= ultimo_km_v <= proxima_troca_v + TOLERANCIA_ALERTA:
-                status_v = "⚠️ Atenção"
+                status_oleo = "⚠️ Atenção"
             else:
-                status_v = "🚨 Urgente"
+                status_oleo = "🚨 Urgente"
+
+            # Alertas adicionais (pneus Ruim) – apenas no dashboard
+            ultimo_check = obter_ultimo_checklist(placa_v)
+            alerta_pneus = "—"
+            if ultimo_check:
+                avisos = []
+                for campo in [
+                    "Pneu dianteiro direito",
+                    "Pneu dianteiro esquerdo",
+                    "Pneu traseiro direito",
+                    "Pneu traseiro esquerdo"
+                ]:
+                    if ultimo_check.get(campo) == "Ruim":
+                        avisos.append(f"{campo} ruim")
+                if avisos:
+                    alerta_pneus = "⚠️ " + " | ".join(avisos)
 
             dados_dashboard.append({
                 "Prefixo": prefixo_v,
@@ -339,7 +347,8 @@ elif st.session_state.usuario:
                 "Última troca": ultima_troca_v if ultima_troca_v > 0 else "—",
                 "Próxima troca": proxima_troca_v,
                 "Faltam (km)": faltam_v,
-                "Status": status_v
+                "Status óleo": status_oleo,
+                "Pneus (alertas)": alerta_pneus
             })
 
         if dados_dashboard:
