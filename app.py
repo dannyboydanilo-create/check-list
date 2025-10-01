@@ -290,6 +290,37 @@ elif st.session_state.usuario:
                 else:
                     salvar_troca_oleo(placa, prefixo, km)
                     st.rerun()
+                    # ---------------- Histórico de Viaturas (Admin) ----------------
+if st.session_state.usuario.get("admin", False):
+    st.markdown("---")
+    st.subheader("📜 Histórico de Viaturas")
+
+    viaturas_hist = carregar_viaturas()
+    opcoes_hist = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_hist]
+    escolha_hist = st.selectbox("Selecione a viatura", ["-- Selecione --"] + opcoes_hist)
+
+    if escolha_hist and escolha_hist != "-- Selecione --":
+        viatura_sel = next((v for v in viaturas_hist if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_hist), None)
+        if viatura_sel:
+            placa_sel = viatura_sel.get("Placa")
+
+            # Histórico de checklists
+            st.markdown("### ✅ Checklists")
+            registros_check = [r.get("fields", {}) for r in checklists_table.all(sort=["-Data"]) if r.get("fields", {}).get("Placa") == placa_sel]
+            if registros_check:
+                df_check = pd.DataFrame(registros_check)
+                st.dataframe(df_check, use_container_width=True)
+            else:
+                st.info("Nenhum checklist registrado para esta viatura.")
+
+            # Histórico de trocas de óleo
+            st.markdown("### 🛢️ Trocas de Óleo")
+            registros_troca = [r.get("fields", {}) for r in trocaoleo_table.all(sort=["-data"]) if r.get("fields", {}).get("Placa") == placa_sel]
+            if registros_troca:
+                df_troca = pd.DataFrame(registros_troca)
+                st.dataframe(df_troca, use_container_width=True)
+            else:
+                st.info("Nenhuma troca de óleo registrada para esta viatura.")
 
     # ---------------- Dashboard de Manutenção (Admin) ----------------
     if st.session_state.usuario.get("admin", False):
@@ -362,3 +393,4 @@ elif st.session_state.usuario:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
+
