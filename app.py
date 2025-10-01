@@ -21,7 +21,7 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 INTERVALO_TROCA_OLEO = 10000
 TOLERANCIA_ALERTA    = 500
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
+TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Hemodialise"]
 
 # ---------------- Usuarios ----------------
 def carregar_usuarios():
@@ -297,3 +297,4 @@ elif st.session_state.usuario:
         st.session_state.usuario = None
         st.session_state.tela = "login"
         st.rerun()
+
