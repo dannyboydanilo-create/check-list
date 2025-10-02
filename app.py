@@ -13,7 +13,7 @@ CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id
 TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
 VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
 
-# Abastecimentos é opcional (habilite com a chave nos secrets)
+# Abastecimentos é opcional
 has_abastecimentos = (
     "connections" in st.secrets and
     "airtable" in st.secrets["connections"] and
@@ -24,7 +24,6 @@ ABASTECIMENTOS_TABLE_ID = (
     if has_abastecimentos else None
 )
 
-# Instâncias de tabelas
 usuarios_table   = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
 checklists_table = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
 trocaoleo_table  = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
@@ -32,11 +31,19 @@ viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
 abastecimentos_table = Table(API_KEY, BASE_ID, ABASTECIMENTOS_TABLE_ID) if has_abastecimentos else None
 
 # ---------------- Constantes ----------------
-INTERVALO_TROCA_OLEO = 10000
 TOLERANCIA_ALERTA    = 500
 OPCOES_COMBUSTIVEL   = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
+TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise", "Moto"]
 OXIGENIO_MIN_PSI     = 50
+
+# Intervalos de troca por tipo
+INTERVALOS_TROCA = {
+    "SAMU": 10000,
+    "Remocao": 10000,
+    "Van Social": 10000,
+    "Van Hemodialise": 10000,
+    "Moto": 2000
+}
 
 # ---------------- Utilidades ----------------
 def parse_iso_datetime(dt_str: str):
@@ -59,19 +66,15 @@ def carregar_usuarios():
 
 def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     existentes = carregar_usuarios()
-    # Login único
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
         st.error("Já existe um usuário com esse login.")
         return
-    # Matrícula única
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
         st.error("Já existe um usuário com essa matrícula.")
         return
-    # Nome com sobrenome
     if len(nome.strip().split()) < 2:
         st.error("O nome deve conter pelo menos um sobrenome.")
         return
-    # Telefone formato (XX) XXXXX-XXXX
     padrao = r"^\(\d{2}\)\s\d{5}-\d{4}$"
     if not re.match(padrao, telefone.strip()):
         st.error("Telefone inválido. Use o formato (XX) XXXXX-XXXX")
@@ -136,10 +139,6 @@ def salvar_troca_oleo(placa, prefixo, km):
     })
     st.success(f"Troca de óleo registrada para {placa} em {int(km)} km.")
 
-def carregar_trocas():
-    registros = trocaoleo_table.all(sort=["-data"])
-    return [r.get("fields", {}) for r in registros]
-
 # ---------------- Checklists ----------------
 def salvar_checklist(dados):
     checklists_table.create(dados, typecast=True)
@@ -188,14 +187,17 @@ def obter_ultimo_km_abastecimento(placa):
     return 0
 
 # ---------------- Alertas ----------------
-def mostrar_alerta_troca(placa, km_atual):
+def mostrar_alerta_troca(placa, km_atual, tipo_servico):
+    intervalo = INTERVALOS_TROCA.get(tipo_servico, 10000)
     ultima_troca_admin = obter_ultima_troca(placa)
+
     if ultima_troca_admin > 0:
-        proxima_troca = ultima_troca_admin + INTERVALO_TROCA_OLEO
+        proxima_troca = ultima_troca_admin + intervalo
         contexto = f"Última troca: {ultima_troca_admin} km | Próxima: {proxima_troca} km."
     else:
-        proxima_troca = ((km_atual // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+        proxima_troca = ((km_atual // intervalo) + 1) * intervalo
         contexto = f"Primeira troca prevista: {proxima_troca} km."
+
     if km_atual < proxima_troca - TOLERANCIA_ALERTA:
         st.info(f"ℹ️ Faltam {proxima_troca - km_atual} km para a troca de óleo. {contexto}")
     elif proxima_troca - TOLERANCIA_ALERTA <= km_atual <= proxima_troca + TOLERANCIA_ALERTA:
@@ -278,7 +280,8 @@ elif st.session_state.usuario:
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("Histórico de trocas de óleo")
-        trocas = carregar_trocas()
+        registros_trocas = trocaoleo_table.all(sort=["-data"])
+        trocas = [r.get("fields", {}) for r in registros_trocas]
         if trocas:
             st.sidebar.dataframe(pd.DataFrame(trocas), use_container_width=True)
         else:
@@ -307,7 +310,7 @@ elif st.session_state.usuario:
                         placa = viatura.get("Placa")
                         prefixo = viatura.get("Prefixo")
 
-            if placa and prefixo:
+            if placa and prefixo and tipo_escolhido and tipo_escolhido != "-- Selecione --":
                 ultimo_km_check = obter_ultimo_km_checklist(placa)
                 if ultimo_km_check > 0:
                     st.info(f"Último km de checklist: {ultimo_km_check} km.")
@@ -326,8 +329,10 @@ elif st.session_state.usuario:
                 if st.button("Salvar checklist"):
                     if km <= 0:
                         st.error("Informe uma quilometragem válida!")
+                        tocar_alerta()
                     elif ultimo_km_check and km < ultimo_km_check:
                         st.error(f"A quilometragem informada ({km}) é menor que a última ({ultimo_km_check}).")
+                        tocar_alerta()
                     else:
                         dados = {
                             "Data": datetime.now().isoformat(),
@@ -347,7 +352,7 @@ elif st.session_state.usuario:
                         st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
 
                         # Alertas do motorista
-                        mostrar_alerta_troca(placa, int(km))
+                        mostrar_alerta_troca(placa, int(km), tipo_escolhido)
                         if ox1 < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI).")
                             tocar_alerta()
@@ -411,6 +416,12 @@ elif st.session_state.usuario:
                                 placa = viatura.get("Placa")
                                 prefixo = viatura.get("Prefixo")
                                 st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
+                                tipo_escolhido_abast = tipo_escolhido
+            else:
+                # Quando já detectou da sessão, recuperar tipo da viatura para alertas se necessário
+                viaturas = carregar_viaturas()
+                v_match = next((v for v in viaturas if v.get("Placa") == placa), None)
+                tipo_escolhido_abast = v_match.get("TipoServico") if v_match else "SAMU"
 
             if placa and prefixo:
                 st.success(f"Registrando abastecimento para: {prefixo} - {placa}")
@@ -430,6 +441,7 @@ elif st.session_state.usuario:
                 if st.button("Salvar abastecimento"):
                     if km_abast <= 0 or litros <= 0 or valor <= 0:
                         st.error("Informe valores válidos para km, litros e valor.")
+                        tocar_alerta()
                     elif ultimo_km_check and km_abast < ultimo_km_check:
                         st.error(f"O km do abastecimento ({km_abast}) não pode ser menor que o último checklist ({ultimo_km_check}).")
                         tocar_alerta()
@@ -461,16 +473,18 @@ elif st.session_state.usuario:
         for v in viaturas_dash:
             placa_v = v.get("Placa")
             prefixo_v = v.get("Prefixo")
+            tipo_v = v.get("TipoServico", "SAMU")
             if not placa_v:
                 continue
 
             ultimo_km_v = obter_ultimo_km_checklist(placa_v)
             ultima_troca_v = obter_ultima_troca(placa_v)
+            intervalo_v = INTERVALOS_TROCA.get(tipo_v, 10000)
 
             if ultima_troca_v > 0:
-                proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
+                proxima_troca_v = ultima_troca_v + intervalo_v
             else:
-                proxima_troca_v = ((max(ultimo_km_v, 0) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+                proxima_troca_v = ((max(ultimo_km_v, 0) // intervalo_v) + 1) * intervalo_v
 
             faltam_v = proxima_troca_v - ultimo_km_v
 
@@ -484,6 +498,7 @@ elif st.session_state.usuario:
             dados_dashboard.append({
                 "Prefixo": prefixo_v,
                 "Placa": placa_v,
+                "Tipo": tipo_v,
                 "Último KM": ultimo_km_v,
                 "Última troca": ultima_troca_v if ultima_troca_v > 0 else "—",
                 "Próxima troca": proxima_troca_v,
