@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 from pyairtable import Table
+import re
 
 # ---------------- Configuração Airtable ----------------
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
@@ -12,7 +13,7 @@ CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id
 TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
 VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
 
-# Abastecimentos é opcional (habilite com a chave no secrets)
+# Abastecimentos é opcional (habilite com a chave nos secrets)
 has_abastecimentos = (
     "connections" in st.secrets and
     "airtable" in st.secrets["connections"] and
@@ -44,6 +45,14 @@ def parse_iso_datetime(dt_str: str):
     except Exception:
         return None
 
+def tocar_alerta():
+    sound = """
+    <audio autoplay>
+        <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+    </audio>
+    """
+    st.markdown(sound, unsafe_allow_html=True)
+
 # ---------------- Usuários ----------------
 def carregar_usuarios():
     return [r.get("fields", {}) for r in usuarios_table.all()]
@@ -62,9 +71,10 @@ def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     if len(nome.strip().split()) < 2:
         st.error("O nome deve conter pelo menos um sobrenome.")
         return
-    # Telefone obrigatório
-    if not telefone.strip():
-        st.error("O telefone é obrigatório.")
+    # Telefone formato (XX) XXXXX-XXXX
+    padrao = r"^\(\d{2}\)\s\d{5}-\d{4}$"
+    if not re.match(padrao, telefone.strip()):
+        st.error("Telefone inválido. Use o formato (XX) XXXXX-XXXX")
         return
 
     usuarios_table.create({
@@ -190,8 +200,10 @@ def mostrar_alerta_troca(placa, km_atual):
         st.info(f"ℹ️ Faltam {proxima_troca - km_atual} km para a troca de óleo. {contexto}")
     elif proxima_troca - TOLERANCIA_ALERTA <= km_atual <= proxima_troca + TOLERANCIA_ALERTA:
         st.warning(f"⚠️ {placa} está na FAIXA DE TROCA! Atual: {km_atual} km | {contexto}")
+        tocar_alerta()
     else:
         st.error(f"🚨 URGENTE: {placa} já passou da troca! Prevista: {proxima_troca} km | Atual: {km_atual} km.")
+        tocar_alerta()
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Checklist SAMU", page_icon="🚑")
@@ -232,7 +244,7 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nova_senha = st.text_input("Nova senha", type="password")
     nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
-    telefone = st.text_input("Telefone (obrigatório)")
+    telefone = st.text_input("Telefone (formato (11) 91234-5678)", placeholder="(11) 91234-5678")
 
     colc1, colc2 = st.columns(2)
     with colc1:
@@ -338,10 +350,13 @@ elif st.session_state.usuario:
                         mostrar_alerta_troca(placa, int(km))
                         if ox1 < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI).")
+                            tocar_alerta()
                         if ox2 < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Grande 2 muito baixo ({ox2} PSI).")
+                            tocar_alerta()
                         if oxp < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI).")
+                            tocar_alerta()
 
                 # Admin: registrar troca de óleo
                 if st.session_state.usuario.get("admin", False):
@@ -363,6 +378,7 @@ elif st.session_state.usuario:
             st.info("Funcionalidade de abastecimento desativada: configure 'abastecimentos_table_id' nos secrets.")
         else:
             placa, prefixo = None, None
+            # Usa viatura da sessão ou detecta pelo último checklist do dia
             if st.session_state.viatura_atual:
                 placa = st.session_state.viatura_atual.get("placa")
                 prefixo = st.session_state.viatura_atual.get("prefixo")
@@ -375,6 +391,7 @@ elif st.session_state.usuario:
                     st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
                     st.info(f"Detectada última viatura do checklist de hoje: {prefixo} - {placa}")
 
+            # Seleção manual se não detectou
             if not placa or not prefixo:
                 st.warning("Nenhuma viatura detectada para hoje. Selecione abaixo:")
                 viaturas = carregar_viaturas()
@@ -398,6 +415,7 @@ elif st.session_state.usuario:
             if placa and prefixo:
                 st.success(f"Registrando abastecimento para: {prefixo} - {placa}")
 
+                # Mostrar últimos KMs
                 ultimo_km_check = obter_ultimo_km_checklist(placa)
                 ultimo_km_abast = obter_ultimo_km_abastecimento(placa)
                 if ultimo_km_check > 0:
@@ -414,8 +432,10 @@ elif st.session_state.usuario:
                         st.error("Informe valores válidos para km, litros e valor.")
                     elif ultimo_km_check and km_abast < ultimo_km_check:
                         st.error(f"O km do abastecimento ({km_abast}) não pode ser menor que o último checklist ({ultimo_km_check}).")
+                        tocar_alerta()
                     elif ultimo_km_abast and km_abast < ultimo_km_abast:
                         st.error(f"O km do abastecimento ({km_abast}) não pode ser menor que o último abastecimento ({ultimo_km_abast}).")
+                        tocar_alerta()
                     else:
                         dados_abast = {
                             "Data": datetime.now().isoformat(),
