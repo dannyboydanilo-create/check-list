@@ -12,7 +12,7 @@ CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id
 TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
 VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
 
-# Abastecimentos é opcional: evita KeyError
+# Abastecimentos é opcional (habilite com a chave no secrets)
 has_abastecimentos = (
     "connections" in st.secrets and
     "airtable" in st.secrets["connections"] and
@@ -48,16 +48,23 @@ def parse_iso_datetime(dt_str: str):
 def carregar_usuarios():
     return [r.get("fields", {}) for r in usuarios_table.all()]
 
-def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
+def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     existentes = carregar_usuarios()
+    # Login único
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
         st.error("Já existe um usuário com esse login.")
         return
+    # Matrícula única
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
         st.error("Já existe um usuário com essa matrícula.")
         return
+    # Nome com sobrenome
     if len(nome.strip().split()) < 2:
         st.error("O nome deve conter pelo menos um sobrenome.")
+        return
+    # Telefone obrigatório
+    if not telefone.strip():
+        st.error("O telefone é obrigatório.")
         return
 
     usuarios_table.create({
@@ -65,6 +72,7 @@ def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
         "senha": senha.strip(),
         "nome": nome.strip(),
         "matricula": matricula.strip(),
+        "telefone": telefone.strip(),
         "is_admin": bool(is_admin),
     })
     st.success("Usuário cadastrado com sucesso!")
@@ -75,6 +83,7 @@ def autenticar(usuario, senha):
             return {
                 "nome": u.get("nome"),
                 "matricula": u.get("matricula"),
+                "telefone": u.get("telefone", ""),
                 "admin": bool(u.get("is_admin", False))
             }
     return None
@@ -223,14 +232,15 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nova_senha = st.text_input("Nova senha", type="password")
     nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
+    telefone = st.text_input("Telefone (obrigatório)")
 
     colc1, colc2 = st.columns(2)
     with colc1:
         if st.button("Cadastrar"):
-            if novo_user and nova_senha and nome and matricula:
-                salvar_usuario(novo_user, nova_senha, nome, matricula, False)
+            if novo_user and nova_senha and nome and matricula and telefone:
+                salvar_usuario(novo_user, nova_senha, nome, matricula, telefone, False)
             else:
-                st.error("Preencha todos os campos!")
+                st.error("Preencha todos os campos, incluindo o telefone!")
     with colc2:
         if st.button("Voltar para login"):
             st.session_state.tela = "login"
@@ -324,6 +334,7 @@ elif st.session_state.usuario:
                         st.success("Checklist registrado!")
                         st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
 
+                        # Alertas do motorista
                         mostrar_alerta_troca(placa, int(km))
                         if ox1 < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI).")
@@ -332,6 +343,7 @@ elif st.session_state.usuario:
                         if oxp < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI).")
 
+                # Admin: registrar troca de óleo
                 if st.session_state.usuario.get("admin", False):
                     st.markdown("---")
                     st.subheader("Troca de óleo")
