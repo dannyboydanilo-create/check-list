@@ -7,17 +7,27 @@ from pyairtable import Table
 API_KEY = st.secrets["connections"]["airtable"]["personal_access_token"]
 BASE_ID = st.secrets["connections"]["airtable"]["base_id"]
 
-USUARIOS_TABLE_ID        = st.secrets["connections"]["airtable"]["usuarios_table_id"]
-CHECKLISTS_TABLE_ID      = st.secrets["connections"]["airtable"]["checklists_table_id"]
-TROCAOLEO_TABLE_ID       = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
-VIATURAS_TABLE_ID        = st.secrets["connections"]["airtable"]["viaturas_table_id"]
-ABASTECIMENTOS_TABLE_ID  = st.secrets["connections"]["airtable"]["abastecimentos_table_id"]
+USUARIOS_TABLE_ID   = st.secrets["connections"]["airtable"]["usuarios_table_id"]
+CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id"]
+TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
+VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
 
-usuarios_table       = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
-checklists_table     = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
-trocaoleo_table      = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
-viaturas_table       = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
-abastecimentos_table = Table(API_KEY, BASE_ID, ABASTECIMENTOS_TABLE_ID)
+# Abastecimentos é opcional: só ativa se a chave existir nos secrets para evitar KeyError
+has_abastecimentos = (
+    "connections" in st.secrets and
+    "airtable" in st.secrets["connections"] and
+    "abastecimentos_table_id" in st.secrets["connections"]["airtable"]
+)
+ABASTECIMENTOS_TABLE_ID = (
+    st.secrets["connections"]["airtable"]["abastecimentos_table_id"]
+    if has_abastecimentos else None
+)
+
+usuarios_table   = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
+checklists_table = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
+trocaoleo_table  = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
+viaturas_table   = Table(API_KEY, BASE_ID, VIATURAS_TABLE_ID)
+abastecimentos_table = Table(API_KEY, BASE_ID, ABASTECIMENTOS_TABLE_ID) if has_abastecimentos else None
 
 # ---------------- Constantes ----------------
 INTERVALO_TROCA_OLEO = 10000
@@ -33,17 +43,15 @@ def carregar_usuarios():
 def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
     existentes = carregar_usuarios()
 
-    # Verifica duplicidade de login
+    # Login único
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
         st.error("Já existe um usuário com esse login. Escolha outro.")
         return
-
-    # Verifica duplicidade de matrícula
+    # Matrícula única
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
         st.error("Já existe um usuário com essa matrícula.")
         return
-
-    # Verifica se nome tem sobrenome
+    # Nome com sobrenome
     if len(nome.strip().split()) < 2:
         st.error("O nome deve conter pelo menos um sobrenome.")
         return
@@ -124,19 +132,24 @@ def obter_ultimo_km(placa):
                 return 0
     return 0
 
-def obter_ultimo_checklist(placa):
+def obter_ultimo_checklist_motorista(matricula):
     registros = checklists_table.all(sort=["-Data"])
     for r in registros:
         f = r.get("fields", {})
-        if f.get("Placa") == placa:
+        if f.get("Matricula") == matricula:
             return f
     return None
 
-# ---------------- Abastecimentos ----------------
+# ---------------- Abastecimentos (opcional) ----------------
 def salvar_abastecimento(dados):
+    if not has_abastecimentos:
+        st.error("Tabela de Abastecimentos não configurada nos secrets.")
+        return
     abastecimentos_table.create(dados, typecast=True)
 
 def carregar_abastecimentos():
+    if not has_abastecimentos:
+        return []
     return [r.get("fields", {}) for r in abastecimentos_table.all(sort=["-Data"])]
 
 # ---------------- Alertas ----------------
@@ -164,6 +177,8 @@ if "usuario" not in st.session_state:
     st.session_state.usuario = None
 if "tela" not in st.session_state:
     st.session_state.tela = "login"
+if "viatura_atual" not in st.session_state:
+    st.session_state.viatura_atual = None  # {"placa": "...", "prefixo": "..."}
 
 # ---------------- Tela de Login ----------------
 if st.session_state.tela == "login" and not st.session_state.usuario:
@@ -171,18 +186,15 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
-    entrar = st.button("Entrar")
-    cadastrar = st.button("Cadastro")
-
-    if entrar:
+    if st.button("Entrar"):
         u = autenticar(usuario, senha)
         if u:
             st.session_state.usuario = u
+            st.session_state.tela = "principal"
             st.rerun()
         else:
             st.error("Usuário ou senha incorretos!")
-
-    if cadastrar:
+    if st.button("Cadastro"):
         st.session_state.tela = "cadastro"
         st.rerun()
 
@@ -194,16 +206,12 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
 
-    cadastrar_user = st.button("Cadastrar")
-    voltar_login = st.button("Voltar para Login")
-
-    if cadastrar_user:
+    if st.button("Cadastrar"):
         if novo_user and nova_senha and nome and matricula:
             salvar_usuario(novo_user, nova_senha, nome, matricula, False)
         else:
             st.error("Preencha todos os campos!")
-
-    if voltar_login:
+    if st.button("Voltar para Login"):
         st.session_state.tela = "login"
         st.rerun()
 
@@ -212,16 +220,14 @@ elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
 
     # ---------------- Sidebar Admin ----------------
-    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Gestão de Viaturas")
         placa_admin = st.sidebar.text_input("Placa")
         prefixo_admin = st.sidebar.text_input("Prefixo")
         status_admin = st.sidebar.selectbox("Status", ["Ativa", "Inativa"])
         tipo_servico_admin = st.sidebar.selectbox("Tipo de Serviço", TIPOS_SERVICO)
         obs_admin = st.sidebar.text_area("Observações")
-        add_viatura = st.sidebar.button("Adicionar Viatura")
-
-        if add_viatura:
+        if st.sidebar.button("Adicionar Viatura"):
             salvar_viatura(placa_admin, prefixo_admin, status_admin, obs_admin, tipo_servico_admin)
 
         st.sidebar.markdown("---")
@@ -238,6 +244,12 @@ elif st.session_state.usuario:
     viaturas_ativas = [v for v in viaturas if v.get("Status") == "Ativa"]
 
     placa, prefixo, tipo_escolhido = None, None, None
+
+    # Se já temos viatura atual em sessão, usa como padrão
+    if st.session_state.viatura_atual:
+        placa = st.session_state.viatura_atual.get("placa")
+        prefixo = st.session_state.viatura_atual.get("prefixo")
+
     if viaturas_ativas:
         tipos_disponiveis = [t for t in TIPOS_SERVICO if any(v.get("TipoServico") == t for v in viaturas_ativas)]
         tipo_escolhido = st.selectbox("Tipo de serviço", ["-- Selecione --"] + tipos_disponiveis)
@@ -245,11 +257,13 @@ elif st.session_state.usuario:
             viaturas_filtradas = [v for v in viaturas_ativas if v.get("TipoServico") == tipo_escolhido]
             if viaturas_filtradas:
                 opcoes = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_filtradas]
-                escolha = st.selectbox("Viatura", opcoes)
-                viatura = next((v for v in viaturas_filtradas if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha), None)
-                if viatura:
-                    placa = viatura.get("Placa")
-                    prefixo = viatura.get("Prefixo")
+                escolha = st.selectbox("Viatura", ["-- Selecione --"] + opcoes)
+                if escolha and escolha != "-- Selecione --":
+                    viatura = next((v for v in viaturas_filtradas if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha), None)
+                    if viatura:
+                        placa = viatura.get("Placa")
+                        prefixo = viatura.get("Prefixo")
+                        st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
             else:
                 st.warning("Nenhuma viatura ativa para esse tipo de serviço.")
     else:
@@ -274,8 +288,7 @@ elif st.session_state.usuario:
         ox2 = st.number_input("Oxigênio Grande 2 (PSI)", min_value=0, step=1)
         oxp = st.number_input("Oxigênio Portátil (PSI)", min_value=0, step=1)
 
-        salvar_check = st.button("Salvar checklist")
-        if salvar_check:
+        if st.button("Salvar checklist"):
             if km <= 0:
                 st.error("Informe uma quilometragem válida!")
             elif ultimo_km_check and km < ultimo_km_check:
@@ -296,6 +309,7 @@ elif st.session_state.usuario:
                 }
                 salvar_checklist(dados)
                 st.success("Checklist registrado!")
+                st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
 
                 # Alertas do motorista: óleo e oxigênio
                 mostrar_alerta_troca(placa, int(km))
@@ -307,11 +321,10 @@ elif st.session_state.usuario:
                     st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI) – reabastecer imediatamente!")
 
         # Admin: registrar troca de óleo
-        if st.session_state.usuario and st.session_state.usuario.get("admin", False):
+        if st.session_state.usuario.get("admin", False):
             st.markdown("---")
             st.subheader("Troca de óleo")
-            registrar_troca = st.button("Registrar troca de óleo")
-            if registrar_troca:
+            if st.button("Registrar troca de óleo"):
                 if km <= 0:
                     st.error("Informe uma quilometragem válida para registrar a troca!")
                 elif ultimo_km_check and km < ultimo_km_check:
@@ -324,30 +337,39 @@ elif st.session_state.usuario:
         st.markdown("---")
         st.subheader("⛽ Registro de Abastecimento")
 
-        km_abast = st.number_input("Quilometragem no abastecimento", min_value=0, step=1)
-        litros = st.number_input("Litros abastecidos", min_value=0.0, step=0.1, format="%.1f")
-        valor = st.number_input("Valor total (R$)", min_value=0.0, step=0.01, format="%.2f")
-        salvar_abast = st.button("Salvar abastecimento")
+        # Sugere a última viatura do motorista (fallback se sessão não tiver)
+        if not st.session_state.viatura_atual:
+            ultimo_do_motorista = obter_ultimo_checklist_motorista(st.session_state.usuario["matricula"])
+            if ultimo_do_motorista:
+                placa = ultimo_do_motorista.get("Placa")
+                prefixo = ultimo_do_motorista.get("Prefixo")
+                st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
 
-        if salvar_abast:
-            if km_abast <= 0 or litros <= 0 or valor <= 0:
-                st.error("Informe valores válidos para km, litros e valor.")
-            else:
-                dados_abast = {
-                    "Data": datetime.now().isoformat(),
-                    "Placa": placa,
-                    "Prefixo": prefixo,
-                    "Condutor": st.session_state.usuario["nome"],
-                    "Matricula": st.session_state.usuario["matricula"],
-                    "Km": int(km_abast),
-                    "Litros": float(litros),
-                    "Valor": float(valor)
-                }
-                salvar_abastecimento(dados_abast)
-                st.success("Abastecimento registrado com sucesso!")
+        if has_abastecimentos:
+            km_abast = st.number_input("Quilometragem no abastecimento", min_value=0, step=1)
+            litros = st.number_input("Litros abastecidos", min_value=0.0, step=0.1, format="%.1f")
+            valor = st.number_input("Valor total (R$)", min_value=0.0, step=0.01, format="%.2f")
+            if st.button("Salvar abastecimento"):
+                if km_abast <= 0 or litros <= 0 or valor <= 0:
+                    st.error("Informe valores válidos para km, litros e valor.")
+                else:
+                    dados_abast = {
+                        "Data": datetime.now().isoformat(),
+                        "Placa": placa,
+                        "Prefixo": prefixo,
+                        "Condutor": st.session_state.usuario["nome"],
+                        "Matricula": st.session_state.usuario["matricula"],
+                        "Km": int(km_abast),
+                        "Litros": float(litros),
+                        "Valor": float(valor)
+                    }
+                    salvar_abastecimento(dados_abast)
+                    st.success("Abastecimento registrado com sucesso!")
+        else:
+            st.info("Funcionalidade de abastecimento está desativada: configure 'abastecimentos_table_id' nos secrets para habilitar.")
 
     # ---------------- Dashboard de Manutenção (Admin) ----------------
-    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario.get("admin", False):
         st.markdown("---")
         st.subheader("📊 Dashboard de Manutenção")
 
@@ -363,7 +385,6 @@ elif st.session_state.usuario:
             ultimo_km_v = obter_ultimo_km(placa_v)
             ultima_troca_v = obter_ultima_troca(placa_v)
 
-            # Próxima troca de óleo
             if ultima_troca_v > 0:
                 proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
             else:
@@ -371,7 +392,6 @@ elif st.session_state.usuario:
 
             faltam_v = proxima_troca_v - ultimo_km_v
 
-            # Status óleo
             if ultimo_km_v < proxima_troca_v - TOLERANCIA_ALERTA:
                 status_oleo = "✅ OK"
             elif proxima_troca_v - TOLERANCIA_ALERTA <= ultimo_km_v <= proxima_troca_v + TOLERANCIA_ALERTA:
@@ -396,7 +416,7 @@ elif st.session_state.usuario:
             st.info("Nenhuma viatura cadastrada ainda.")
 
     # ---------------- Histórico de Viaturas (Admin) ----------------
-    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario.get("admin", False):
         st.markdown("---")
         st.subheader("📜 Histórico de Viaturas")
 
@@ -412,7 +432,7 @@ elif st.session_state.usuario:
             if viatura_sel:
                 placa_sel = viatura_sel.get("Placa")
 
-                # Histórico de checklists (sem pneus)
+                # Histórico de checklists
                 st.markdown("### ✅ Checklists")
                 registros_check_raw = checklists_table.all(sort=["-Data"])
                 registros_check = [
@@ -438,30 +458,34 @@ elif st.session_state.usuario:
                 else:
                     st.info("Nenhuma troca de óleo registrada para esta viatura.")
 
-                # Histórico de abastecimentos
-                st.markdown("### ⛽ Abastecimentos")
-                registros_abast_raw = abastecimentos_table.all(sort=["-Data"])
-                registros_abast = [
-                    r.get("fields", {}) for r in registros_abast_raw
-                    if r.get("fields", {}).get("Placa") == placa_sel
-                ]
-                if registros_abast:
-                    df_abast = pd.DataFrame(registros_abast)
-                    # Cálculo simples de consumo se possível (entre entradas consecutivas)
-                    try:
-                        df_abast_sorted = df_abast.sort_values(by="Km")
-                        df_abast_sorted["Km anterior"] = df_abast_sorted["Km"].shift(1)
-                        df_abast_sorted["Km rodados"] = df_abast_sorted["Km"] - df_abast_sorted["Km anterior"]
-                        df_abast_sorted["Consumo (km/l)"] = df_abast_sorted["Km rodados"] / df_abast_sorted["Litros"]
-                        st.dataframe(df_abast_sorted, use_container_width=True)
-                    except Exception:
-                        st.dataframe(df_abast, use_container_width=True)
+                # Histórico de abastecimentos (se ativado)
+                if has_abastecimentos:
+                    st.markdown("### ⛽ Abastecimentos")
+                    registros_abast_raw = abastecimentos_table.all(sort=["-Data"])
+                    registros_abast = [
+                        r.get("fields", {}) for r in registros_abast_raw
+                        if r.get("fields", {}).get("Placa") == placa_sel
+                    ]
+                    if registros_abast:
+                        df_abast = pd.DataFrame(registros_abast)
+                        try:
+                            df_abast_sorted = df_abast.sort_values(by="Km")
+                            df_abast_sorted["Km anterior"] = df_abast_sorted["Km"].shift(1)
+                            df_abast_sorted["Km rodados"] = df_abast_sorted["Km"] - df_abast_sorted["Km anterior"]
+                            df_abast_sorted["Consumo (km/l)"] = df_abast_sorted["Km rodados"] / df_abast_sorted["Litros"]
+                            df_abast_sorted["R$/litro"] = df_abast_sorted["Valor"] / df_abast_sorted["Litros"]
+                            df_abast_sorted["R$/km"] = df_abast_sorted["Valor"] / df_abast_sorted["Km rodados"]
+                            st.dataframe(df_abast_sorted, use_container_width=True)
+                        except Exception:
+                            st.dataframe(df_abast, use_container_width=True)
+                    else:
+                        st.info("Nenhum abastecimento registrado para esta viatura.")
                 else:
-                    st.info("Nenhum abastecimento registrado para esta viatura.")
+                    st.info("Histórico de abastecimentos desativado (configure 'abastecimentos_table_id' nos secrets).")
 
     # ---------------- Sair ----------------
-    sair = st.button("Sair")
-    if sair:
+    if st.button("Sair"):
         st.session_state.usuario = None
         st.session_state.tela = "login"
+        st.session_state.viatura_atual = None
         st.rerun()
