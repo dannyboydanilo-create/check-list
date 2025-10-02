@@ -12,7 +12,7 @@ CHECKLISTS_TABLE_ID = st.secrets["connections"]["airtable"]["checklists_table_id
 TROCAOLEO_TABLE_ID  = st.secrets["connections"]["airtable"]["trocaoleo_table_id"]
 VIATURAS_TABLE_ID   = st.secrets["connections"]["airtable"]["viaturas_table_id"]
 
-# Abastecimentos é opcional: evita KeyError se não houver chave nos secrets
+# Abastecimentos é opcional: evita KeyError
 has_abastecimentos = (
     "connections" in st.secrets and
     "airtable" in st.secrets["connections"] and
@@ -23,6 +23,7 @@ ABASTECIMENTOS_TABLE_ID = (
     if has_abastecimentos else None
 )
 
+# Instâncias de tabelas
 usuarios_table   = Table(API_KEY, BASE_ID, USUARIOS_TABLE_ID)
 checklists_table = Table(API_KEY, BASE_ID, CHECKLISTS_TABLE_ID)
 trocaoleo_table  = Table(API_KEY, BASE_ID, TROCAOLEO_TABLE_ID)
@@ -37,9 +38,8 @@ TIPOS_SERVICO        = ["SAMU", "Remocao", "Van Social", "Van Hemodialise"]
 OXIGENIO_MIN_PSI     = 50
 
 # ---------------- Utilidades ----------------
-def parse_iso_datetime(dt_str):
+def parse_iso_datetime(dt_str: str):
     try:
-        # Aceita strings ISO, com ou sem 'Z'
         return datetime.fromisoformat(dt_str.replace("Z", ""))
     except Exception:
         return None
@@ -51,7 +51,7 @@ def carregar_usuarios():
 def salvar_usuario(usuario, senha, nome, matricula, is_admin=False):
     existentes = carregar_usuarios()
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
-        st.error("Já existe um usuário com esse login. Escolha outro.")
+        st.error("Já existe um usuário com esse login.")
         return
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
         st.error("Já existe um usuário com essa matrícula.")
@@ -125,7 +125,7 @@ def carregar_trocas():
 def salvar_checklist(dados):
     checklists_table.create(dados, typecast=True)
 
-def obter_ultimo_km(placa):
+def obter_ultimo_km_checklist(placa):
     registros = checklists_table.all(sort=["-Data"])
     for r in registros:
         f = r.get("fields", {})
@@ -145,20 +145,28 @@ def obter_ultimo_checklist_do_motorista_hoje(matricula: str):
             continue
         dt = parse_iso_datetime(f.get("Data", ""))
         if dt and dt.date() == hoje:
-            return f  # retorna o checklist mais recente do dia desse motorista
+            return f
     return None
 
 # ---------------- Abastecimentos ----------------
 def salvar_abastecimento(dados):
     if not has_abastecimentos:
-        st.error("Tabela de Abastecimentos não configurada nos secrets.")
+        st.error("Tabela de Abastecimentos não configurada.")
         return
     abastecimentos_table.create(dados, typecast=True)
 
-def carregar_abastecimentos():
+def obter_ultimo_km_abastecimento(placa):
     if not has_abastecimentos:
-        return []
-    return [r.get("fields", {}) for r in abastecimentos_table.all(sort=["-Data"])]
+        return 0
+    registros = abastecimentos_table.all(sort=["-Data"])
+    for r in registros:
+        f = r.get("fields", {})
+        if f.get("Placa") == placa:
+            try:
+                return int(f.get("Km", 0))
+            except Exception:
+                return 0
+    return 0
 
 # ---------------- Alertas ----------------
 def mostrar_alerta_troca(placa, km_atual):
@@ -193,18 +201,20 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
-    if st.button("Entrar"):
-        u = autenticar(usuario, senha)
-        if u:
-            st.session_state.usuario = u
-            st.session_state.tela = "principal"
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Entrar"):
+            u = autenticar(usuario, senha)
+            if u:
+                st.session_state.usuario = u
+                st.session_state.tela = "principal"
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos!")
+    with col2:
+        if st.button("Cadastro"):
+            st.session_state.tela = "cadastro"
             st.rerun()
-        else:
-            st.error("Usuário ou senha incorretos!")
-
-    if st.button("Cadastro"):
-        st.session_state.tela = "cadastro"
-        st.rerun()
 
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
@@ -214,14 +224,17 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
 
-    if st.button("Cadastrar"):
-        if novo_user and nova_senha and nome and matricula:
-            salvar_usuario(novo_user, nova_senha, nome, matricula, False)
-        else:
-            st.error("Preencha todos os campos!")
-    if st.button("Voltar para login"):
-        st.session_state.tela = "login"
-        st.rerun()
+    colc1, colc2 = st.columns(2)
+    with colc1:
+        if st.button("Cadastrar"):
+            if novo_user and nova_senha and nome and matricula:
+                salvar_usuario(novo_user, nova_senha, nome, matricula, False)
+            else:
+                st.error("Preencha todos os campos!")
+    with colc2:
+        if st.button("Voltar para login"):
+            st.session_state.tela = "login"
+            st.rerun()
 
 # ---------------- Tela Principal ----------------
 elif st.session_state.usuario:
@@ -258,7 +271,6 @@ elif st.session_state.usuario:
         if not viaturas_ativas:
             st.info("Cadastre viaturas ativas para continuar.")
         else:
-            # Seleção por tipo de serviço e viatura
             tipos_disponiveis = [t for t in TIPOS_SERVICO if any(v.get("TipoServico") == t for v in viaturas_ativas)]
             tipo_escolhido = st.selectbox("Tipo de serviço", ["-- Selecione --"] + tipos_disponiveis)
 
@@ -274,14 +286,14 @@ elif st.session_state.usuario:
                         prefixo = viatura.get("Prefixo")
 
             if placa and prefixo:
-                ultimo_km_check = obter_ultimo_km(placa)
+                ultimo_km_check = obter_ultimo_km_checklist(placa)
                 if ultimo_km_check > 0:
                     st.info(f"Último km de checklist: {ultimo_km_check} km.")
                 ultima_troca_admin = obter_ultima_troca(placa)
                 if ultima_troca_admin > 0:
                     st.info(f"Última troca de óleo: {ultima_troca_admin} km.")
 
-                km = st.number_input("Quilometragem atual", min_value=0, step=1)
+                km = st.number_input("Quilometragem atual (checklist)", min_value=0, step=1)
                 comb = st.radio("Nível de combustível", OPCOES_COMBUSTIVEL, horizontal=True)
 
                 st.markdown("#### Oxigênio")
@@ -312,7 +324,6 @@ elif st.session_state.usuario:
                         st.success("Checklist registrado!")
                         st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
 
-                        # Alertas do motorista
                         mostrar_alerta_troca(placa, int(km))
                         if ox1 < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Grande 1 muito baixo ({ox1} PSI).")
@@ -321,7 +332,6 @@ elif st.session_state.usuario:
                         if oxp < OXIGENIO_MIN_PSI:
                             st.error(f"🚨 Oxigênio Portátil muito baixo ({oxp} PSI).")
 
-                # Admin: registrar troca de óleo
                 if st.session_state.usuario.get("admin", False):
                     st.markdown("---")
                     st.subheader("Troca de óleo")
@@ -340,7 +350,6 @@ elif st.session_state.usuario:
         if not has_abastecimentos:
             st.info("Funcionalidade de abastecimento desativada: configure 'abastecimentos_table_id' nos secrets.")
         else:
-            # Tenta usar a viatura atual da sessão; se não houver, busca o último checklist do dia do motorista
             placa, prefixo = None, None
             if st.session_state.viatura_atual:
                 placa = st.session_state.viatura_atual.get("placa")
@@ -354,7 +363,6 @@ elif st.session_state.usuario:
                     st.session_state.viatura_atual = {"placa": placa, "prefixo": prefixo}
                     st.info(f"Detectada última viatura do checklist de hoje: {prefixo} - {placa}")
 
-            # Se ainda não tiver viatura, deixa selecionar
             if not placa or not prefixo:
                 st.warning("Nenhuma viatura detectada para hoje. Selecione abaixo:")
                 viaturas = carregar_viaturas()
@@ -377,6 +385,14 @@ elif st.session_state.usuario:
 
             if placa and prefixo:
                 st.success(f"Registrando abastecimento para: {prefixo} - {placa}")
+
+                ultimo_km_check = obter_ultimo_km_checklist(placa)
+                ultimo_km_abast = obter_ultimo_km_abastecimento(placa)
+                if ultimo_km_check > 0:
+                    st.info(f"Último km de checklist: {ultimo_km_check} km.")
+                if ultimo_km_abast > 0:
+                    st.info(f"Último km de abastecimento: {ultimo_km_abast} km.")
+
                 km_abast = st.number_input("Quilometragem no abastecimento", min_value=0, step=1)
                 litros = st.number_input("Litros abastecidos", min_value=0.0, step=0.1, format="%.1f")
                 valor = st.number_input("Valor total (R$)", min_value=0.0, step=0.01, format="%.2f")
@@ -384,6 +400,10 @@ elif st.session_state.usuario:
                 if st.button("Salvar abastecimento"):
                     if km_abast <= 0 or litros <= 0 or valor <= 0:
                         st.error("Informe valores válidos para km, litros e valor.")
+                    elif ultimo_km_check and km_abast < ultimo_km_check:
+                        st.error(f"O km do abastecimento ({km_abast}) não pode ser menor que o último checklist ({ultimo_km_check}).")
+                    elif ultimo_km_abast and km_abast < ultimo_km_abast:
+                        st.error(f"O km do abastecimento ({km_abast}) não pode ser menor que o último abastecimento ({ultimo_km_abast}).")
                     else:
                         dados_abast = {
                             "Data": datetime.now().isoformat(),
@@ -398,10 +418,11 @@ elif st.session_state.usuario:
                         salvar_abastecimento(dados_abast)
                         st.success("Abastecimento registrado com sucesso!")
 
-    # ---------------- Dashboard e histórico (Admin) ----------------
+    # ---------------- Dashboard de Manutenção (Admin) ----------------
     if st.session_state.usuario.get("admin", False):
         st.markdown("---")
         st.subheader("📊 Dashboard de manutenção")
+
         viaturas_dash = carregar_viaturas()
         dados_dashboard = []
 
@@ -410,13 +431,17 @@ elif st.session_state.usuario:
             prefixo_v = v.get("Prefixo")
             if not placa_v:
                 continue
-            ultimo_km_v = obter_ultimo_km(placa_v)
+
+            ultimo_km_v = obter_ultimo_km_checklist(placa_v)
             ultima_troca_v = obter_ultima_troca(placa_v)
+
             if ultima_troca_v > 0:
                 proxima_troca_v = ultima_troca_v + INTERVALO_TROCA_OLEO
             else:
                 proxima_troca_v = ((max(ultimo_km_v, 0) // INTERVALO_TROCA_OLEO) + 1) * INTERVALO_TROCA_OLEO
+
             faltam_v = proxima_troca_v - ultimo_km_v
+
             if ultimo_km_v < proxima_troca_v - TOLERANCIA_ALERTA:
                 status_oleo = "✅ OK"
             elif proxima_troca_v - TOLERANCIA_ALERTA <= ultimo_km_v <= proxima_troca_v + TOLERANCIA_ALERTA:
@@ -435,23 +460,34 @@ elif st.session_state.usuario:
             })
 
         if dados_dashboard:
-            st.dataframe(pd.DataFrame(dados_dashboard), use_container_width=True)
+            df_dash = pd.DataFrame(dados_dashboard)
+            st.dataframe(df_dash, use_container_width=True)
         else:
             st.info("Nenhuma viatura cadastrada ainda.")
 
+    # ---------------- Histórico de Viaturas (Admin) ----------------
+    if st.session_state.usuario.get("admin", False):
         st.markdown("---")
         st.subheader("📜 Histórico de viaturas")
+
         viaturas_hist = carregar_viaturas()
         opcoes_hist = [f"{v.get('Prefixo','')} - {v.get('Placa','')}" for v in viaturas_hist]
         escolha_hist = st.selectbox("Selecione a viatura", ["-- Selecione --"] + opcoes_hist)
+
         if escolha_hist and escolha_hist != "-- Selecione --":
-            viatura_sel = next((v for v in viaturas_hist if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_hist), None)
+            viatura_sel = next(
+                (v for v in viaturas_hist if f"{v.get('Prefixo','')} - {v.get('Placa','')}" == escolha_hist),
+                None
+            )
             if viatura_sel:
                 placa_sel = viatura_sel.get("Placa")
 
                 st.markdown("### ✅ Checklists")
                 registros_check_raw = checklists_table.all(sort=["-Data"])
-                registros_check = [r.get("fields", {}) for r in registros_check_raw if r.get("fields", {}).get("Placa") == placa_sel]
+                registros_check = [
+                    r.get("fields", {}) for r in registros_check_raw
+                    if r.get("fields", {}).get("Placa") == placa_sel
+                ]
                 if registros_check:
                     st.dataframe(pd.DataFrame(registros_check), use_container_width=True)
                 else:
@@ -459,7 +495,10 @@ elif st.session_state.usuario:
 
                 st.markdown("### 🛢️ Trocas de óleo")
                 registros_troca_raw = trocaoleo_table.all(sort=["-data"])
-                registros_troca = [r.get("fields", {}) for r in registros_troca_raw if r.get("fields", {}).get("Placa") == placa_sel]
+                registros_troca = [
+                    r.get("fields", {}) for r in registros_troca_raw
+                    if r.get("fields", {}).get("Placa") == placa_sel
+                ]
                 if registros_troca:
                     st.dataframe(pd.DataFrame(registros_troca), use_container_width=True)
                 else:
@@ -468,7 +507,10 @@ elif st.session_state.usuario:
                 if has_abastecimentos:
                     st.markdown("### ⛽ Abastecimentos")
                     registros_abast_raw = abastecimentos_table.all(sort=["-Data"])
-                    registros_abast = [r.get("fields", {}) for r in registros_abast_raw if r.get("fields", {}).get("Placa") == placa_sel]
+                    registros_abast = [
+                        r.get("fields", {}) for r in registros_abast_raw
+                        if r.get("fields", {}).get("Placa") == placa_sel
+                    ]
                     if registros_abast:
                         df_abast = pd.DataFrame(registros_abast)
                         try:
@@ -487,6 +529,7 @@ elif st.session_state.usuario:
                     st.info("Histórico de abastecimentos desativado (configure 'abastecimentos_table_id' nos secrets).")
 
     # ---------------- Sair ----------------
+    st.markdown("---")
     if st.button("Sair"):
         st.session_state.usuario = None
         st.session_state.tela = "login"
