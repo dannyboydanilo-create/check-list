@@ -196,9 +196,9 @@ st.title("🚑 Check List Ambulância SAMU/SOCIAL")
 
 if "usuario" not in st.session_state: st.session_state.usuario = None
 if "tela" not in st.session_state: st.session_state.tela = "login"
-if "viatura_atual" not in st.session_state: st.session_state.viatura_atual = None  # {"placa": "...", "prefixo": "..."}
+if "viatura_atual" not in st.session_state: st.session_state.viatura_atual = None
 
-# ---------------- Tela de Login ----------------
+# ---------------- Login ----------------
 if st.session_state.tela == "login" and not st.session_state.usuario:
     st.subheader("Login")
     usuario = st.text_input("Usuário")
@@ -219,7 +219,7 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
             st.session_state.tela = "cadastro"
             st.rerun()
 
-# ---------------- Tela de Cadastro ----------------
+# ---------------- Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     st.subheader("Cadastro de usuário")
     novo_user = st.text_input("Novo usuário (login)")
@@ -240,7 +240,7 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
             st.session_state.tela = "login"
             st.rerun()
 
-# ---------------- Tela Principal ----------------
+# ---------------- Principal ----------------
 elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
     opcao = st.radio("Escolha o que deseja fazer:", ["Checklist", "Abastecimento"])
@@ -259,8 +259,7 @@ elif st.session_state.usuario:
         st.sidebar.markdown("---")
         st.sidebar.subheader("Histórico de trocas de óleo")
         trocas = [r.get("fields", {}) for r in trocaoleo_table.all(sort=["-data"])]
-        if trocas: st.sidebar.dataframe(pd.DataFrame(trocas), use_container_width=True)
-        else: st.sidebar.info("Nenhuma troca registrada ainda.")
+        st.sidebar.dataframe(pd.DataFrame(trocas), use_container_width=True) if trocas else st.sidebar.info("Nenhuma troca registrada ainda.")
 
     # Checklist
     if opcao == "Checklist":
@@ -444,8 +443,7 @@ elif st.session_state.usuario:
                 "Faltam (km)": faltam_v,
                 "Status óleo": status_oleo
             })
-        if dados_dashboard: st.dataframe(pd.DataFrame(dados_dashboard), use_container_width=True)
-        else: st.info("Nenhuma viatura cadastrada ainda.")
+        st.dataframe(pd.DataFrame(dados_dashboard), use_container_width=True) if dados_dashboard else st.info("Nenhuma viatura cadastrada ainda.")
 
     # Histórico de Viaturas (Admin)
     if st.session_state.usuario.get("admin", False):
