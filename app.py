@@ -246,11 +246,10 @@ elif st.session_state.tela == "atualizar_cadastro":
     if voltar:
         st.session_state.tela = "principal"
         st.rerun()
-
 # ---------------- Tela Principal ----------------
 elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
-    
+
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
@@ -266,21 +265,23 @@ elif st.session_state.usuario:
 
     # Checklist
     if opcao == "Checklist":
-        # [todo o seu código de checklist aqui — já está completo e funcionando]
-        # (Você pode colar o trecho que me enviou anteriormente sem alterações)
+        # ⬅️ Cole aqui o bloco completo de checklist que você já tinha
+        # (Inclui seleção de viatura, oxigênio, quilometragem, alerta de troca, etc.)
 
     # Abastecimento
     elif opcao == "Abastecimento":
-        # [todo o seu código de abastecimento aqui — já está completo e funcionando]
-        # (Você pode colar o trecho que me enviou anteriormente sem alterações)
+        # ⬅️ Cole aqui o bloco completo de abastecimento que você já tinha
+        # (Inclui seleção de viatura, km, litros, valor, validações, etc.)
 
     # Dashboard Manutenção (Admin)
     if st.session_state.usuario.get("admin", False):
-        # [todo o seu dashboard de manutenção — já está completo e funcionando]
+        # ⬅️ Cole aqui o bloco completo do dashboard de manutenção
+        # (Inclui cálculo de próxima troca, status de óleo, etc.)
 
     # Histórico de Viaturas (Admin)
     if st.session_state.usuario.get("admin", False):
-        # [todo o seu histórico de viaturas — já está completo e funcionando]
+        # ⬅️ Cole aqui o bloco completo do histórico de viaturas
+        # (Inclui checklists, trocas de óleo, abastecimentos, consumo, etc.)
 
     st.markdown("---")
     if st.button("Sair"):
