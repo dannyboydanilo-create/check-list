@@ -93,14 +93,15 @@ def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     st.success("Usuário cadastrado com sucesso!")
 
 def autenticar(usuario, senha):
-  def atualizar_senha(usuario, senha_antiga, nova_senha):
-    registros = usuarios_table.all()
-    for r in registros:
-        f = r.get("fields", {})
-        if f.get("usuario") == usuario and f.get("senha") == senha_antiga:
-            usuarios_table.update(r["id"], {"senha": nova_senha})
-            return True
-    return False
+    for u in carregar_usuarios():
+        if u.get("usuario") == usuario and u.get("senha") == senha:
+            return {
+                "nome": u.get("nome"),
+                "matricula": u.get("matricula"),
+                "telefone": u.get("telefone", ""),
+                "admin": bool(u.get("is_admin", False))
+            }
+    return None
 
 def atualizar_senha(usuario, senha_antiga, nova_senha):
     registros = usuarios_table.all()
@@ -577,6 +578,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
