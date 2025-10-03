@@ -225,7 +225,7 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     nova_senha = st.text_input("Nova senha", type="password")
     nome = st.text_input("Nome completo (com sobrenome)")
     matricula = st.text_input("Matrícula")
-    telefone = st.text_input("Telefone (formato (11) 91234-5678)", placeholder="(11) 91234-5678")
+    telefone = st.text_input("Telefone (apenas números)", max_chars=11, placeholder="Ex: 11912345678")
 
     cc1, cc2 = st.columns(2)
     with cc1:
@@ -491,4 +491,5 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
