@@ -102,6 +102,27 @@ def autenticar(usuario, senha):
                 "admin": bool(u.get("is_admin", False))
             }
     return None
+    
+def atualizar_senha(usuario, senha_antiga, nova_senha):
+    registros = usuarios_table.all()
+    for r in registros:
+        f = r.get("fields", {})
+        if f.get("usuario") == usuario and f.get("senha") == senha_antiga:
+            usuarios_table.update(r["id"], {"senha": nova_senha})
+            return True
+    return False
+
+def atualizar_cadastro(matricula, novo_nome, novo_telefone):
+    registros = usuarios_table.all()
+    for r in registros:
+        f = r.get("fields", {})
+        if f.get("matricula") == matricula:
+            usuarios_table.update(r["id"], {
+                "nome": novo_nome,
+                "telefone": novo_telefone
+            })
+            return True
+    return False
 
 # ---------------- Viaturas ----------------
 def carregar_viaturas():
@@ -230,6 +251,42 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     st.subheader("Cadastro de usuário")
+    
+    elif st.session_state.tela == "mudar_senha":
+    st.subheader("🔐 Alterar senha")
+    senha_atual = st.text_input("Senha atual", type="password")
+    nova_senha = st.text_input("Nova senha", type="password")
+    confirmar = st.text_input("Confirmar nova senha", type="password")
+
+elif st.session_state.tela == "atualizar_cadastro":
+    st.subheader("📝 Atualizar cadastro")
+    nome_atual = st.session_state.usuario["nome"]
+    telefone_atual = st.session_state.usuario["telefone"]
+
+    novo_nome = st.text_input("Nome completo", value=nome_atual)
+    novo_telefone = st.text_input("Telefone (apenas números)", value=telefone_atual, max_chars=11)
+
+    if st.button("Salvar alterações"):
+        if not novo_nome or not novo_telefone.isdigit() or len(novo_telefone) != 11:
+            st.error("Preencha corretamente os campos.")
+        elif atualizar_cadastro(st.session_state.usuario["matricula"], novo_nome, novo_telefone):
+            st.success("Cadastro atualizado!")
+            st.session_state.usuario["nome"] = novo_nome
+            st.session_state.usuario["telefone"] = novo_telefone
+            st.session_state.tela = "principal"
+        else:
+            st.error("Erro ao atualizar cadastro.")
+
+    if st.button("Atualizar senha"):
+        if not (senha_atual and nova_senha and confirmar):
+            st.error("Preencha todos os campos.")
+        elif nova_senha != confirmar:
+            st.error("A nova senha e a confirmação não coincidem.")
+        elif atualizar_senha(st.session_state.usuario["nome"], senha_atual, nova_senha):
+            st.success("Senha atualizada com sucesso!")
+            st.session_state.tela = "principal"
+        else:
+            st.error("Senha atual incorreta.")
 
     novo_user    = st.text_input("Novo usuário (login)")
     nova_senha   = st.text_input("Nova senha", type="password")
@@ -263,6 +320,16 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
 elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
     opcao = st.radio("Escolha o que deseja fazer:", ["Checklist", "Abastecimento"])
+    st.markdown("---")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🔐 Mudar senha"):
+        st.session_state.tela = "mudar_senha"
+        st.rerun()
+with col2:
+    if st.button("📝 Atualizar cadastro"):
+        st.session_state.tela = "atualizar_cadastro"
+        st.rerun()
 
     # Sidebar Admin
     if st.session_state.usuario.get("admin", False):
@@ -511,6 +578,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
