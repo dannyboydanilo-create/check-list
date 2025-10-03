@@ -301,26 +301,32 @@ elif st.session_state.tela == "mudar_senha":
 
 
 # ---------------- Tela de Atualizar Cadastro ----------------
-elif st.session_state.tela == "atualizar_cadastro":
-    st.subheader("✏️ Atualizar cadastro")
-    nome_atual = st.session_state.usuario["nome"]
-    telefone_atual = st.session_state.usuario["telefone"]
+elif st.session_state.tela == "mudar_senha":
+    st.subheader("🔄 Alterar senha")
 
-    novo_nome = st.text_input("Nome completo", value=nome_atual)
-    novo_telefone = st.text_input("Telefone (apenas números)", value=telefone_atual, max_chars=11)
+    senha_atual = st.text_input("Senha atual", type="password")
+    nova_senha = st.text_input("Nova senha", type="password")
+    confirmar = st.text_input("Confirmar nova senha", type="password")
 
-    if st.button("Salvar alterações"):
-        if not novo_nome or not novo_telefone.isdigit() or len(novo_telefone) != 11:
-            st.error("Preencha corretamente os campos.")
-        elif atualizar_cadastro(st.session_state.usuario["matricula"], novo_nome, novo_telefone):
-            st.success("Cadastro atualizado!")
-            st.session_state.usuario["nome"] = novo_nome
-            st.session_state.usuario["telefone"] = novo_telefone
+    col1, col2 = st.columns(2)
+    with col1:
+        atualizar = st.button("Atualizar senha")
+    with col2:
+        voltar = st.button("Voltar")
+
+    if atualizar:
+        if not (senha_atual and nova_senha and confirmar):
+            st.error("Preencha todos os campos.")
+        elif nova_senha != confirmar:
+            st.error("A nova senha e a confirmação não coincidem.")
+        elif atualizar_senha(st.session_state.usuario["nome"], senha_atual, nova_senha):
+            st.success("Senha atualizada com sucesso!")
             st.session_state.tela = "principal"
+            st.rerun()
         else:
-            st.error("Erro ao atualizar cadastro.")
+            st.error("Senha atual incorreta.")
 
-  if st.button("Voltar"):
+    if voltar:
         st.session_state.tela = "principal"
         st.rerun()
 
@@ -571,6 +577,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
