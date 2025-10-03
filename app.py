@@ -64,16 +64,23 @@ def carregar_usuarios():
 
 def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     existentes = carregar_usuarios()
+
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
-        st.error("Já existe um usuário com esse login."); return
+        st.error("Já existe um usuário com esse login.")
+        return
+
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
-        st.error("Já existe um usuário com essa matrícula."); return
+        st.error("Já existe um usuário com essa matrícula.")
+        return
+
     if len(nome.strip().split()) < 2:
-        st.error("O nome deve conter pelo menos um sobrenome."); return
+        st.error("O nome deve conter pelo menos um sobrenome.")
+        return
+
     if not telefone.strip().isdigit() or len(telefone.strip()) != 11:
-    st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular).")
-    return
-    
+        st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular).")
+        return
+
     usuarios_table.create({
         "usuario": usuario.strip(),
         "senha": senha.strip(),
@@ -82,6 +89,7 @@ def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
         "telefone": telefone.strip(),
         "is_admin": bool(is_admin),
     })
+
     st.success("Usuário cadastrado com sucesso!")
 
 def autenticar(usuario, senha):
@@ -493,6 +501,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
