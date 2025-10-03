@@ -292,6 +292,11 @@ elif st.session_state.tela == "mudar_senha":
         else:
             st.error("Senha atual incorreta.")
 
+ if st.button("Voltar"):
+        st.session_state.tela = "principal"
+        st.rerun()
+
+
 # ---------------- Tela de Atualizar Cadastro ----------------
 elif st.session_state.tela == "atualizar_cadastro":
     st.subheader("✏️ Atualizar cadastro")
@@ -311,6 +316,11 @@ elif st.session_state.tela == "atualizar_cadastro":
             st.session_state.tela = "principal"
         else:
             st.error("Erro ao atualizar cadastro.")
+
+  if st.button("Voltar"):
+        st.session_state.tela = "principal"
+        st.rerun()
+
 
 # ---------------- Tela Principal ----------------
 elif st.session_state.usuario:
@@ -558,6 +568,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
