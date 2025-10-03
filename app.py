@@ -325,7 +325,7 @@ with col2:
         st.session_state.tela = "atualizar_cadastro"
         st.rerun()
 
-    elif st.session_state.tela == "atualizar_cadastro":
+elif st.session_state.tela == "atualizar_cadastro":
     st.subheader("✏️ Atualizar cadastro")
 
     nome_atual = st.session_state.usuario["nome"]
@@ -603,6 +603,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
