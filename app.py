@@ -357,6 +357,7 @@ with col2:
         else: st.sidebar.info("Nenhuma troca registrada ainda.")
 
     # Checklist
+    opcao = st.radio("Escolha uma opção", ["Checklist", "Histórico", "Viaturas"])
     if opcao == "Checklist":
         st.subheader("✅ Checklist da viatura")
         viaturas = carregar_viaturas()
@@ -586,6 +587,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
