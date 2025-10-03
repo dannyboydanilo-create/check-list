@@ -340,7 +340,7 @@ with col2:
         st.rerun()
 
     # Sidebar Admin
-    if st.session_state.usuario.get("admin", False):
+    if st.session_state.usuario and st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Gestão de viaturas")
         placa_admin = st.sidebar.text_input("Placa")
         prefixo_admin = st.sidebar.text_input("Prefixo")
@@ -586,6 +586,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
