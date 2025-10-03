@@ -32,13 +32,12 @@ abastecimentos_table = Table(API_KEY, BASE_ID, ABASTECIMENTOS_TABLE_ID) if has_a
 # ---------------- Constantes ----------------
 TOLERANCIA_ALERTA  = 500
 OPCOES_COMBUSTIVEL = ["1/4", "1/2", "3/4", "Cheio"]
-TIPOS_SERVICO      = ["SAMU", "Remocao", "Van Social", "Van Hemodialise", "Moto"]
+TIPOS_SERVICO      = ["SAMU", "Remocao", "Van Hemodialise", "Moto"]
 OXIGENIO_MIN_PSI   = 50
 
 INTERVALOS_TROCA = {
     "SAMU": 10000,
     "Remocao": 10000,
-    "Van Social": 10000,
     "Van Hemodialise": 10000,
     "Moto": 2000
 }
@@ -511,6 +510,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
