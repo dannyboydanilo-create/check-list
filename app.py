@@ -325,6 +325,37 @@ with col2:
         st.session_state.tela = "atualizar_cadastro"
         st.rerun()
 
+    elif st.session_state.tela == "atualizar_cadastro":
+    st.subheader("✏️ Atualizar cadastro")
+
+    nome_atual = st.session_state.usuario["nome"]
+    telefone_atual = st.session_state.usuario["telefone"]
+
+    novo_nome = st.text_input("Nome completo", value=nome_atual)
+    novo_telefone = st.text_input("Telefone (apenas números)", value=telefone_atual, max_chars=11)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        salvar = st.button("Salvar alterações")
+    with col2:
+        voltar = st.button("Voltar")
+
+    if salvar:
+        if not novo_nome or not novo_telefone.isdigit() or len(novo_telefone) != 11:
+            st.error("Preencha corretamente os campos.")
+        elif atualizar_cadastro(st.session_state.usuario["matricula"], novo_nome, novo_telefone):
+            st.success("Cadastro atualizado!")
+            st.session_state.usuario["nome"] = novo_nome
+            st.session_state.usuario["telefone"] = novo_telefone
+            st.session_state.tela = "principal"
+            st.rerun()
+        else:
+            st.error("Erro ao atualizar cadastro.")
+
+    if voltar:
+        st.session_state.tela = "principal"
+        st.rerun()
+
     # Sidebar Admin
     if st.session_state.usuario.get("admin", False):
         st.sidebar.subheader("Gestão de viaturas")
@@ -572,6 +603,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
