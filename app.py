@@ -62,7 +62,7 @@ def tocar_alerta():
 def carregar_usuarios():
     return [r.get("fields", {}) for r in usuarios_table.all()]
 
-ddef salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
+def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     existentes = carregar_usuarios()
 
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
@@ -511,6 +511,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
