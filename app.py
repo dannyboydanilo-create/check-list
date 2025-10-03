@@ -231,7 +231,8 @@ elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     with cc1:
         if st.button("Cadastrar"):
             if novo_user and nova_senha and nome and matricula and telefone:
-                salvar_usuario(novo_user, nova_senha, nome, matricula, telefone, False)
+                telefone_formatado = f"({telefone[:2]}) {telefone[2:7]}-{telefone[7:]}"
+                salvar_usuario(novo_user, nova_senha, nome, matricula, telefone_formatado, False)
             else:
                 st.error("Preencha todos os campos, incluindo o telefone!")
     with cc2:
@@ -491,5 +492,6 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
