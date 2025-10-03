@@ -71,7 +71,8 @@ def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     if len(nome.strip().split()) < 2:
         st.error("O nome deve conter pelo menos um sobrenome."); return
     if not telefone.strip().isdigit() or len(telefone.strip()) != 11:
-    st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular)."); return
+    st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular).")
+    return
     
     usuarios_table.create({
         "usuario": usuario.strip(),
@@ -492,6 +493,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
