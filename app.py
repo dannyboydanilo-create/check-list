@@ -229,10 +229,12 @@ if "viatura_atual" not in st.session_state: st.session_state.viatura_atual = Non
 
 # ---------------- Tela de Login ----------------
 if st.session_state.tela == "login":
-    # código da tela de login
+    st.subheader("Login")
+    # ... restante do código da tela de login
 
 elif st.session_state.tela == "cadastro":
-    # código da tela de cadastro
+    st.subheader("Cadastro")
+    # ... restante do código da tela de cadastro
 
 elif st.session_state.tela == "mudar_senha":
     st.subheader("🔐 Alterar senha")
@@ -603,6 +605,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
