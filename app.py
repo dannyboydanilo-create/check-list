@@ -228,25 +228,50 @@ if "tela" not in st.session_state: st.session_state.tela = "login"
 if "viatura_atual" not in st.session_state: st.session_state.viatura_atual = None  # {"placa": "...", "prefixo": "..."}
 
 # ---------------- Tela de Login ----------------
-if st.session_state.tela == "login" and not st.session_state.usuario:
-    st.subheader("Login")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
+if st.session_state.tela == "login":
+    # código da tela de login
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Entrar"):
-            u = autenticar(usuario, senha)
-            if u:
-                st.session_state.usuario = u
-                st.session_state.tela = "principal"
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos!")
-    with c2:
-        if st.button("Cadastro"):
-            st.session_state.tela = "cadastro"
-            st.rerun()
+elif st.session_state.tela == "cadastro":
+    # código da tela de cadastro
+
+elif st.session_state.tela == "mudar_senha":
+    st.subheader("🔐 Alterar senha")
+    senha_atual = st.text_input("Senha atual", type="password")
+    nova_senha = st.text_input("Nova senha", type="password")
+    confirmar = st.text_input("Confirmar nova senha", type="password")
+
+    if st.button("Atualizar senha"):
+        if not (senha_atual and nova_senha and confirmar):
+            st.error("Preencha todos os campos.")
+        elif nova_senha != confirmar:
+            st.error("A nova senha e a confirmação não coincidem.")
+        elif atualizar_senha(st.session_state.usuario["nome"], senha_atual, nova_senha):
+            st.success("Senha atualizada com sucesso!")
+            st.session_state.tela = "principal"
+        else:
+            st.error("Senha atual incorreta.")
+
+elif st.session_state.tela == "atualizar_cadastro":
+    st.subheader("📝 Atualizar cadastro")
+    nome_atual = st.session_state.usuario["nome"]
+    telefone_atual = st.session_state.usuario["telefone"]
+
+    novo_nome = st.text_input("Nome completo", value=nome_atual)
+    novo_telefone = st.text_input("Telefone (apenas números)", value=telefone_atual, max_chars=11)
+
+    if st.button("Salvar alterações"):
+        if not novo_nome or not novo_telefone.isdigit() or len(novo_telefone) != 11:
+            st.error("Preencha corretamente os campos.")
+        elif atualizar_cadastro(st.session_state.usuario["matricula"], novo_nome, novo_telefone):
+            st.success("Cadastro atualizado!")
+            st.session_state.usuario["nome"] = novo_nome
+            st.session_state.usuario["telefone"] = novo_telefone
+            st.session_state.tela = "principal"
+        else:
+            st.error("Erro ao atualizar cadastro.")
+
+elif st.session_state.usuario:
+    # tela principal do app
 
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
@@ -578,6 +603,7 @@ with col2:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
