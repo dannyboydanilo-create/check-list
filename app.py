@@ -64,15 +64,22 @@ def carregar_usuarios():
 
 def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
     existentes = carregar_usuarios()
+
     if any(u.get("usuario", "").strip().lower() == usuario.strip().lower() for u in existentes):
-        st.error("Já existe um usuário com esse login."); return
+        st.error("Já existe um usuário com esse login.")
+        return
+
     if any(u.get("matricula", "").strip().lower() == matricula.strip().lower() for u in existentes):
-        st.error("Já existe um usuário com essa matrícula."); return
+        st.error("Já existe um usuário com essa matrícula.")
+        return
+
     if len(nome.strip().split()) < 2:
-        st.error("O nome deve conter pelo menos um sobrenome."); return
-    padrao = r"^\(\d{2}\)\s\d{5}-\d{4}$"
-    if not re.match(padrao, telefone.strip()):
-        st.error("Telefone inválido. Use o formato (XX) XXXXX-XXXX"); return
+        st.error("O nome deve conter pelo menos um sobrenome.")
+        return
+
+    if not telefone.strip().isdigit() or len(telefone.strip()) != 11:
+        st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular).")
+        return
 
     usuarios_table.create({
         "usuario": usuario.strip(),
@@ -82,6 +89,7 @@ def salvar_usuario(usuario, senha, nome, matricula, telefone, is_admin=False):
         "telefone": telefone.strip(),
         "is_admin": bool(is_admin),
     })
+
     st.success("Usuário cadastrado com sucesso!")
 
 def autenticar(usuario, senha):
@@ -222,24 +230,35 @@ if st.session_state.tela == "login" and not st.session_state.usuario:
 # ---------------- Tela de Cadastro ----------------
 elif st.session_state.tela == "cadastro" and not st.session_state.usuario:
     st.subheader("Cadastro de usuário")
-    novo_user = st.text_input("Novo usuário (login)")
-    nova_senha = st.text_input("Nova senha", type="password")
-    nome = st.text_input("Nome completo (com sobrenome)")
-    matricula = st.text_input("Matrícula")
-    telefone = st.text_input("Telefone (formato (11) 91234-5678)", placeholder="(11) 91234-5678")
+
+    novo_user    = st.text_input("Novo usuário (login)")
+    nova_senha   = st.text_input("Nova senha", type="password")
+    nome         = st.text_input("Nome completo (com sobrenome)")
+    matricula    = st.text_input("Matrícula")
+    telefone_raw = st.text_input("Telefone (apenas números)", max_chars=11, placeholder="Ex: 11912345678")
 
     cc1, cc2 = st.columns(2)
     with cc1:
         if st.button("Cadastrar"):
-            if novo_user and nova_senha and nome and matricula and telefone:
-                salvar_usuario(novo_user, nova_senha, nome, matricula, telefone, False)
-            else:
+            if not (novo_user and nova_senha and nome and matricula and telefone_raw):
                 st.error("Preencha todos os campos, incluindo o telefone!")
+            elif not telefone_raw.isdigit() or len(telefone_raw) != 11:
+                st.error("Telefone inválido. Digite apenas os 11 números (DDD + celular).")
+            elif len(nome.strip().split()) < 2:
+                st.error("O nome deve conter pelo menos um sobrenome.")
+            else:
+                salvar_usuario(
+                    novo_user.strip(),
+                    nova_senha.strip(),
+                    nome.strip(),
+                    matricula.strip(),
+                    telefone_raw.strip(),
+                    False
+                )
     with cc2:
         if st.button("Voltar para login"):
             st.session_state.tela = "login"
             st.rerun()
-
 # ---------------- Tela Principal ----------------
 elif st.session_state.usuario:
     st.success(f"Bem-vindo, {st.session_state.usuario['nome']} ({st.session_state.usuario['matricula']})")
@@ -492,3 +511,10 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
+
+
+
+
+
+
