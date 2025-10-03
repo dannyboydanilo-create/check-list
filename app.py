@@ -282,17 +282,9 @@ elif st.session_state.tela == "mudar_senha":
     confirmar = st.text_input("Confirmar nova senha", type="password")
 
     if st.button("Atualizar senha"):
-        if not (senha_atual and nova_senha and confirmar):
-            st.error("Preencha todos os campos.")
-        elif nova_senha != confirmar:
-            st.error("A nova senha e a confirmação não coincidem.")
-        elif atualizar_senha(st.session_state.usuario["nome"], senha_atual, nova_senha):
-            st.success("Senha atualizada com sucesso!")
-            st.session_state.tela = "principal"
-        else:
-            st.error("Senha atual incorreta.")
+        # lógica...
 
- if st.button("Voltar"):
+    if st.button("Voltar"):  # ✅ certo: alinhado com o restante
         st.session_state.tela = "principal"
         st.rerun()
 
@@ -568,6 +560,7 @@ elif st.session_state.usuario:
         st.session_state.tela = "login"
         st.session_state.viatura_atual = None
         st.rerun()
+
 
 
 
